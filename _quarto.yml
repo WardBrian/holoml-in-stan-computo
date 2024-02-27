@@ -1,2 +1,4 @@
 project:
   title: "HoloML in Stan"
+syntax-definitions:
+  - ./stan.xml
