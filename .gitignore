@@ -1,13 +1,17 @@
 *_files/
-template-computo-python.html
-logo_text_white.pdf
-template-computo-python.pdf
-template-computo-python.ipynb
-template-computo-python.tex
+*.html
+*.pdf
+*.ipynb
+*.tex
 _extensions/
 /.quarto/
 /.joblib
 /_extensions/
+/env/
+.vscode/
+
+*.hpp
+holoml
 
 # Latex compilation files:
 *.aux

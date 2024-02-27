@@ -1,0 +1,11 @@
+name: holoml-in-stan
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - jupyter
+  - matplotlib
+  - numpy
+  - scipy
+  - cmdstan=2.34.1
+  - cmdstanpy=1.2.1
