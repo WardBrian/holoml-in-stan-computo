@@ -75,7 +75,9 @@ parameters {
   matrix<lower=0, upper=1>[N, N] X;
 }
 model {
-  // prior - penalizing L2 on adjacent pixels
+  // ICAR prior / L2 penalty on row/adjacent pixels
+  // to_vector(X[2:N, ]) ~ normal(to_vector(X[1:N - 1, ]), sigma);
+  // to_vector(X[ , 2:N]) ~ normal(to_vector(X[ , 1:N - 1]), sigma);
   for (i in 1 : rows(X) - 1) {
     X[i] ~ normal(X[i + 1], sigma);
   }
@@ -84,10 +86,10 @@ model {
   }
 
   // likelihood
-  // object representing specimen and reference together
+  // specimen, separator, and reference concatenated
   matrix[N, 2 * N + d] X0R = append_col(X, append_col(separation, R));
-  // signal - squared magnitude of the (oversampled) FFT
-  matrix[M1, M2] Y = abs(fft2(X0R, M1, M2)) .^ 2;
+  // expected signal - squared magnitude of the (oversampled) FFT
+  matrix[M1, M2] Y = square(abs(fft2(X0R, M1, M2)));
 
   real N_p_over_Y_bar = N_p / mean(Y);
   matrix[M1, M2] lambda = N_p_over_Y_bar * Y;

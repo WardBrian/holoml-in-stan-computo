@@ -22,7 +22,7 @@ author:
   - name: David Barmherzig
     email: dbarmherzig@flatironinstitute.org
     url: https://davidbar.org/
-    orcid:
+    orcid: 0000-0003-2466-981X
     affiliations:
       - name: Flatiron Institute
         department: Center for Computational Mathematics
