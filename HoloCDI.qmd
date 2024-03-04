@@ -1,0 +1,174 @@
+---
+title: "Estimation and Sampling for Holographic Coherent Diffraction Imaging"
+subtitle: "Low-photon image reconstruction with MLE, MAP, VB, and MCMC"
+author:
+  - name: Brian Ward
+    corresponding: true
+    email: bward@flatironinstitute.org
+    url: https://brianward.dev/
+    orcid: 0000-0002-9841-3342
+    affiliations:
+      - name: Flatiron Institute
+        department: Center for Computational Mathematics
+        url: https://www.simonsfoundation.org/flatiron/center-for-computational-mathematics/
+  - name: Bob Carpenter
+    email: bcarpenter@flatironinstitute.org
+    url: https://bob-carpenter.github.io/
+    orcid: 0000-0002-2433-9688
+    affiliations:
+      - name: Flatiron Institute
+        department: Center for Computational Mathematics
+        url: https://www.simonsfoundation.org/flatiron/center-for-computational-mathematics/
+  - name: David Barmherzig
+    email: dbarmherzig@flatironinstitute.org
+    url: https://davidbar.org/
+    orcid: 0000-0003-2466-981X
+    affiliations:
+      - name: Flatiron Institute
+        department: Center for Computational Mathematics
+        url: https://www.simonsfoundation.org/flatiron/center-for-computational-mathematics/
+date: last-modified
+date-modified: last-modified
+description: |
+#  This case study surveys several inference and evaluation schemes for holographic coherent diffraction imaging.
+abstract: >+
+  This case study implements the forward model for holographic coherent diffraction imaging (Holo CDI) in terms of unconstrained parameters and explores several ways of solving the inverse problem. Maximum a posteriori estimates (MAP) and penalized maximum likelihood estimates (MLE) are provided by limited memory quasi-Newton optimization (L-BFGS).  Variational Bayes (VB) is implemented with Pathfinder and evaluated for approximate posterior mean and approximate posterior draws.  Markov chain Monte Carlo (MCMC) is implemented with the no-U-turn sampler (NUTS) and evaluated for approximate posterior mean and approximate posterior draws.  Fits are evaluated in terms of (root mean) square error (RMSE), expected log predictive density (ELPD), structural similarity (SSIM), and peak signal-to-noise ratio (PSNR).
+keywords: [Stan, coherent-diffraction-imaging, statistics, bayesian, phase-retrieval, inverse-problem]
+citation:
+  type: article-journal
+  container-title: "Computo"
+  doi: "xxxx"
+  url: https://computo.sfds.asso.fr/template-computo-quarto
+  publisher: "Société Française de Statistique"
+  issn: "2824-7795"
+bibliography: references.bib
+github-user: WardBrian
+repo: "holoml-in-stan-computo"
+draft: true # set to false once the build is running
+published: false # will be set to true once accepted
+monofont: Menlo
+monofontoptions: 
+  - Scale=0.80
+format:
+  computo-html: default
+  computo-pdf: default
+jupyter: python3
+---
+
+
+# Introduction
+
+Coherent diffraction imaging (CDI) is a technique for imaging nanoscale biomolecules such as macroviruses and proteins.  CDI involves exposing the object being imaged to a coherent beam of X-rays and measuring the diffracted photon flux at a sensor placed behind the object being imaged.  The diffraction pattern theoretically follows a Fourier transform, but only the squared magnitude is observed, which induces a phase-retrieval problem where the real and imaginary components of the complex variables must be inferred so that the process may be inverted to form an image.  Solving the inverse problem for CDI is highly challenging and typically lacks a unique solution [@barnett2020].
+
+Holographic coherent diffraction imaging (HCDI) is a variant of CDI in which the specimen is placed some distance away from a known reference object, and the data observed is the pattern of  diffraction around both the specimen and the reference. The addition of a reference object reduces the inverse problem to a linear deconvolution problem which has a unique, closed-form solution in the idealized setting [@barmherzig2019].
+
+In this note, we follow @barmherzig2022 in defining a forward statistical model that, given the image being reconstructed, defines the expected photon flux at the sensors in terms of the Fourier transform of the image and Poisson sampling of incident photons.  Starting from the model of @barmherzig2022, we add an intrinsic conditional autoregressive (ICAR) prior on the image which can be used to control smoothing of adjacent pixels [@besag1991].  We then log-odds (logit) transform the parameters of the model, which represent pixel intensity between 0 and 1, into unconstrained variables so the model has support on all of $\mathbb{R}^{M \times N}$ for an $M \times N$ pixel image. 
+
+The forward model of holographic CDI defines a sampling distribution for the observed photon flux.  When combined with a prior, the forward model induces an inverse problem whereby we measure photon flux on a grid of sensors and infer the image that caused it.  We will explore the following standard algorithms for exact and approximate solution of the inverse problem.
+
+* Penalized maxmum likelihood (MLE):  Solve with optimization, do not adjust for unconstraining transform.
+* Maximum a posteriori (MAP): Solve with optimization, adjusting for the unconstraining transform.
+* Variational Bayes (VB): Solve by minimizing Kullback-Leibler divergence from an approximate posterior to the true posterior.
+* Markov chain Monte Carlo (MCMC): Solve by sampling from the posterior and averaging.
+
+Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for analyzing fits to data.  
+
+@barmherzig2022 used two different optimizers for maximum likelihood inference, conjugate gradient and trust regions. We will employ limited memory quasi-Newton optimization in the form of the limited-memory BFGS (L-BFGS) optimizer [@zhu1997], which tends to outperform both conjugate gradient and trust-region methods for relatively simple optimization problems in moderately high dimensions like this one.  If the model adjusts for the inverse log odds (logistic) transform, the optimizer produces a maximum a posteriori (MAP) estimate, whereas if the model does not adjust for the change of variables, the optimizer produces a penalized maximum likelihood estimate (MLE).
+
+We employ two different Bayesian methods for solving the inverse problem, variational Bayes (VB) and Markov chain Monte Carlo (MCMC) sampling.  For MCMC, we employ the no-U-turn sampler (NUTS) [@hoffman2014], which is an adaptive form of Hamiltonian Monte Carlo (HMC).  With MCMC, the result is an exact posterior sampler for which estimation error goes to zero as sample size goes to infinity.  For variational Bayes, we employ Pathfinder [@zhang2022].  With VB, the results are only approximate, and in particular, posterior uncertainty tends to be systematically underestimated because we minimize KL-divergence from the approximation to the target distribution.
+
+## Python boilerplate
+
+Generating the data requires the standard Python numerical libraries `scipy.stats` and `numpy`, as well as the plotting library `matplotlib` to display results.  Stan is accessed through the `cmdstanpy` and `bridgestan` interfaces.
+
+```{python}
+import cmdstanpy as csp
+import bridgestan as bs
+import numpy as np
+import scipy as sp
+
+import matplotlib as mpl
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+
+# disable axes drawing, since we are showing images
+mpl.rc('axes.spines', top=False, bottom=False, left=False, right=False)
+mpl.rc('axes', facecolor='white')
+mpl.rc("xtick", bottom=False, labelbottom=False)
+mpl.rc("ytick", left=False, labelleft=False)
+
+def rgb2gray(rgb):
+    """Convert a nxmx3 RGB array to a grayscale nxm array.
+
+    This function uses the same internal coefficients as MATLAB:
+    https://www.mathworks.com/help/matlab/ref/rgb2gray.html
+    """
+    r, g, b = rgb[:, :, 0], rgb[:, :, 1], rgb[:, :, 2]
+    gray = 0.2989 * r + 0.5870 * g + 0.1140 * b
+
+    return gray
+```
+
+
+
+
+
+# The generative statistical process
+
+The statistical process or phase retrieval is a purely generative model (sometimes called a "forward model" in scientific contexts).  First, we generate an image from the prior $x \sim p_X(\cdot)$.  Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution $y \sim p_{Y \mid X}(\cdot \mid x).$
+
+For simplicity of exposition, we will restrict attention to models and inference for $256 \times 256$ pixel black and white images, whose pixel values are taken to be continuous values in $[0, 1]$, with 0 representing black and 1 representing white. An image can be represented as a variable $X \in [0, 1]^{256 \times 256}.$
+
+## The prior
+
+Although there is a great deal of latitutde here for introducing meaninful priors [@kadkhodaie2021], we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$  We start with an implicit uniform distribution on $\mathbb{R}^{256 \times 256}$ for propriety, and then multiply in an ICAR prior among adjacent elements, to produce the density
+\begin{equation}
+p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \sigma),
+\end{equation}
+where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  An alternative could include diagonal adjacency, with $(m, n) \sim (m + 1, n + 1)$, but diagonal smoothing is not employed here.
+
+## Sample data
+
+Rather than generating test files from the prior, which is not strong enough to give realistic images, we instead use a set of test images.  We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus) known as a mimivirus. It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
+
+
+```{python}
+#| fig-cap: Image of a mimivirus.  *The capsid is an icosahedron 400nm across with 100nm filaments. <small>[Original image](https://upload.wikimedia.org/wikipedia/commons/5/57/Electron_microscopic_image_of_a_mimivirus_-_journal.ppat.1000087.g007_crop.png) copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5). license.*
+#| label: fig-mimivirus
+#| fig-align: center
+#| fig_pos: 't'
+
+X_src = rgb2gray(mpimg.imread('mimivirus.png'))
+plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
+```
+
+## The reference image
+
+For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978].  The pattern used here is known as a *uniformly redundant array* (URA) [@fenimore1978].  The URA is depicted in @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
+
+```{python}
+#| fig-cap: Uniformly redundant array. *This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.*
+#| label: fig-ura
+#| fig-align: center
+#| fig_pos: 't'
+
+R = np.loadtxt('URA.csv', delimiter=",", dtype=int)
+plt.imshow(R, cmap='gray')
+```
+
+There is also a purely black separator of the same size as the image, which we will denote as $Z$ because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen.'
+
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
+
+
+# Appendicies {.unnumbered}
+
+## A. Stan Program {#full-code .appendix .unnumbered}
+
+```stan
+{{< include holoml.stan >}}
+```
