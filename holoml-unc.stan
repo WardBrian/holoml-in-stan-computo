@@ -1,4 +1,4 @@
-fit wouunctions {
+functions {
   /**
    * Return a beam stop of dimension M1 x M2, with 1 values blocking
    * the lowest frequency portions of an FFT and 0 values elsewhere.
@@ -53,7 +53,6 @@ fit wouunctions {
    * @return ICAR log density for the specified matrix and scale
    */
   real icar_lpdf(matrix X, real sigma) {
-    // -0.5 / (sigma * sigma) * (dot_self(to_vector(X[2:N] - X[1:N - 1])) + dot_self(to_vector(X[ , 2:N] - X[ , 1:N - 1])));
     return normal_lpdf(to_vector(X[2:N, ]) | to_vector(X[1:N - 1, ]), sigma)
       + normal_lpdf(to_vector(X[ , 2:N]) | to_vector(X[ , 1:N - 1]), sigma);
   }
@@ -75,7 +74,10 @@ transformed data {
   matrix[N, N + d] Z_R = append_col(Z, R);            // separator + ref
 }
 parameters {
-  matrix<lower=0, upper=1>[N, N] X;    // image
+  matrix[N, N] logit_X;  // logit(image)
+}
+transformed parameters {
+  matrix<lower=0, upper=1>[N, N] X = inv_logit(logit_X);
 }
 model {
   X ~ icar(sigma);

@@ -1,6 +1,6 @@
 ---
 title: "Estimation and Sampling for Holographic Coherent Diffraction Imaging"
-subtitle: "Low-photon image reconstruction with MLE, MAP, VB, and MCMC"
+subtitle: "Low-photon phase retrieval with MLE, MAP, VB, and MCMC"
 author:
   - name: Brian Ward
     corresponding: true
@@ -32,8 +32,8 @@ date-modified: last-modified
 description: |
 #  This case study surveys several inference and evaluation schemes for holographic coherent diffraction imaging.
 abstract: >+
-  This case study implements the forward model for holographic coherent diffraction imaging (Holo CDI) in terms of unconstrained parameters and explores several ways of solving the inverse problem. Maximum a posteriori estimates (MAP) and penalized maximum likelihood estimates (MLE) are provided by limited memory quasi-Newton optimization (L-BFGS).  Variational Bayes (VB) is implemented with Pathfinder and evaluated for approximate posterior mean and approximate posterior draws.  Markov chain Monte Carlo (MCMC) is implemented with the no-U-turn sampler (NUTS) and evaluated for approximate posterior mean and approximate posterior draws.  Fits are evaluated in terms of (root mean) square error (RMSE), expected log predictive density (ELPD), structural similarity (SSIM), and peak signal-to-noise ratio (PSNR).
-keywords: [Stan, coherent-diffraction-imaging, statistics, bayesian, phase-retrieval, inverse-problem]
+  This case study provides a forward model for holographic coherent diffraction imaging (Holo CDI) in terms of unconstrained parameters and explores several ways of solving the inverse problem. Maximum a posteriori estimates (MAP) and penalized maximum likelihood estimates (MLE) are provided by limited memory quasi-Newton optimization (L-BFGS).  Variational Bayes (VB) is implemented with Pathfinder and evaluated for approximate posterior mean and approximate posterior draws.  Markov chain Monte Carlo (MCMC) is implemented with the no-U-turn sampler (NUTS) and evaluated for approximate posterior mean and approximate posterior draws.  Fits are evaluated in terms of (root mean) square error (RMSE), expected log predictive density (ELPD), structural similarity (SSIM), and peak signal-to-noise ratio (PSNR).
+keywords: [Stan, coherent-diffraction-imaging, statistics, bayesian, phase-retrieval, inverse-problem <br /> <br /> ]
 citation:
   type: article-journal
   container-title: "Computo"
@@ -109,31 +109,35 @@ def rgb2gray(rgb):
     return gray
 ```
 
-
-
-
-
 # The generative statistical process
 
-The statistical process or phase retrieval is a purely generative model (sometimes called a "forward model" in scientific contexts).  First, we generate an image from the prior $x \sim p_X(\cdot)$.  Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution $y \sim p_{Y \mid X}(\cdot \mid x).$
+For simplicity of exposition, we will restrict attention to black and white digital images at $256 \times 256$ pixel resolution.  The pixel values will be represented with continuous values in $[0, 1]$, with 0 being black and 1 white. An image is thus an element $X \in [0, 1]^{256 \times 256}.$
 
-For simplicity of exposition, we will restrict attention to models and inference for $256 \times 256$ pixel black and white images, whose pixel values are taken to be continuous values in $[0, 1]$, with 0 representing black and 1 representing white. An image can be represented as a variable $X \in [0, 1]^{256 \times 256}.$
+The statistical process or phase retrieval is a purely generative model (sometimes called a "forward model" in scientific contexts).  First, we generate an image from the prior,
+\begin{equation}
+x \sim p_X(\cdot).
+\end{equation}
+Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution,
+\begin{equation}
+y \sim p_{Y \mid X}(\cdot \mid x).
+\end{equation}
 
 ## The prior
 
-Although there is a great deal of latitutde here for introducing meaninful priors [@kadkhodaie2021], we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$  We start with an implicit uniform distribution on $\mathbb{R}^{256 \times 256}$ for propriety, and then multiply in an ICAR prior among adjacent elements, to produce the density
+Because the space $[0, 1]^{256 \times 256}$ is compact, it would be possible to use a uniform prior.  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021].  Instead, we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$  The ICAR prior is defined by
 \begin{equation}
-p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \sigma),
+p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \ \sigma),
 \end{equation}
-where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  An alternative could include diagonal adjacency, with $(m, n) \sim (m + 1, n + 1)$, but diagonal smoothing is not employed here.
+where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  This distribution can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  An alternative would be to place a prior directly on the unconstrained log odds of the pixel values, with independent standard logistic distributions producing uniform distributions when transformed back to $(0, 1)$.
+
+It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do that here.  
 
 ## Sample data
 
 Rather than generating test files from the prior, which is not strong enough to give realistic images, we instead use a set of test images.  We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus) known as a mimivirus. It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
 
-
 ```{python}
-#| fig-cap: Image of a mimivirus.  *The capsid is an icosahedron 400nm across with 100nm filaments. <small>[Original image](https://upload.wikimedia.org/wikipedia/commons/5/57/Electron_microscopic_image_of_a_mimivirus_-_journal.ppat.1000087.g007_crop.png) copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5). license.*
+#| fig-cap: Image of a mimivirus.  The capsid is an icosahedron 400nm across with 100nm filaments. [Original image](https://upload.wikimedia.org/wikipedia/commons/5/57/Electron_microscopic_image_of_a_mimivirus_-_journal.ppat.1000087.g007_crop.png) copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5) license.
 #| label: fig-mimivirus
 #| fig-align: center
 #| fig_pos: 't'
@@ -147,7 +151,7 @@ plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
 For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978].  The pattern used here is known as a *uniformly redundant array* (URA) [@fenimore1978].  The URA is depicted in @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
 
 ```{python}
-#| fig-cap: Uniformly redundant array. *This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.*
+#| fig-cap: Uniformly redundant array. This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.
 #| label: fig-ura
 #| fig-align: center
 #| fig_pos: 't'
