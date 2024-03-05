@@ -113,7 +113,9 @@ def rgb2gray(rgb):
 
 For simplicity of exposition, we will restrict attention to black and white digital images at $256 \times 256$ pixel resolution.  The pixel values will be represented with continuous values in $[0, 1]$, with 0 being black and 1 white. An image is thus an element $X \in [0, 1]^{256 \times 256}.$
 
-The statistical process or phase retrieval is a purely generative model (sometimes called a "forward model" in scientific contexts).  First, we generate an image from the prior,
+The generative model here will generate images, represented with a random variable $X \in \mathbb{R}^{N \times N}$ from the prior and then generate photon counts ($Y \in \mathbb{N}^{M_1 \times M_2}$) conditioned on the images.  The counts are wider because they include photon counts for the image, the separator, the reference image, and the padding.
+
+The generation of the observations proceeds by generating an image from the prior,
 \begin{equation}
 x \sim p_X(\cdot).
 \end{equation}
@@ -134,10 +136,10 @@ It would also be possible to smooth along the diagonals by including an adjacenc
 
 ## Sample data
 
-Rather than generating test files from the prior, which is not strong enough to give realistic images, we instead use a set of test images.  We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus) known as a mimivirus. It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
+Rather than generating test files from the prior, which is not strong enough to give realistic images, we instead use a set of test images.  We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus). It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
 
 ```{python}
-#| fig-cap: Image of a mimivirus.  The capsid is an icosahedron 400nm across with 100nm filaments. [Original image](https://upload.wikimedia.org/wikipedia/commons/5/57/Electron_microscopic_image_of_a_mimivirus_-_journal.ppat.1000087.g007_crop.png) copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5) license.
+#| fig-cap: Image of a mimivirus.  The capsid is an icosahedron 400nm across with 100nm filaments. Image copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5) license.
 #| label: fig-mimivirus
 #| fig-align: center
 #| fig_pos: 't'
