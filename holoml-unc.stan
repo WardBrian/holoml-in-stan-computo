@@ -74,13 +74,13 @@ transformed data {
   matrix[N, N + d] Z_R = append_col(Z, R);            // separator + ref
 }
 parameters {
-  matrix[N, N] logit_X;  // logit(image)
+  matrix[N, N] logit_X;  // log-odds transformed image
 }
 transformed parameters {
-  matrix<lower=0, upper=1>[N, N] X = inv_logit(logit_X);
+  matrix<lower=0, upper=1>[N, N] X = inv_logit(logit_X);  // image
 }
 model {
-  X ~ icar(sigma);
+  logit_X ~ icar(sigma);
   matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
   matrix[M1, M2] Y = square(abs(pad_fft2(X_Z_R, M1, M2)));
   matrix[M1, M2] lambda = N_p / mean(Y) * Y; 

@@ -32,7 +32,7 @@ date-modified: last-modified
 description: |
 #  This case study surveys several inference and evaluation schemes for holographic coherent diffraction imaging.
 abstract: >+
-  This case study provides a forward model for holographic coherent diffraction imaging (Holo CDI) in terms of unconstrained parameters and explores several ways of solving the inverse problem. Maximum a posteriori estimates (MAP) and penalized maximum likelihood estimates (MLE) are provided by limited memory quasi-Newton optimization (L-BFGS).  Variational Bayes (VB) is implemented with Pathfinder and evaluated for approximate posterior mean and approximate posterior draws.  Markov chain Monte Carlo (MCMC) is implemented with the no-U-turn sampler (NUTS) and evaluated for approximate posterior mean and approximate posterior draws.  Fits are evaluated in terms of (root mean) square error (RMSE), expected log predictive density (ELPD), structural similarity (SSIM), and peak signal-to-noise ratio (PSNR).
+  This case study provides a forward statistical model for holographic coherent diffraction imaging (Holo CDI) that generates a random photon flux from an image and explores several ways of solving the inverse problem (i.e., recovering the image from the measured flux). Maximum a posteriori estimates (MAP) and penalized maximum likelihood estimates (MLE) are provided by limited memory quasi-Newton optimization (L-BFGS).  Variational Bayes (VB) is implemented with Pathfinder.  Markov chain Monte Carlo (MCMC) is implemented with the no-U-turn sampler (NUTS).  Evaluations include log density, root mean square error (RMSE), and the image-specific measures structural similarity (SSIM) and and peak signal-to-noise ratio (PSNR).
 keywords: [Stan, coherent-diffraction-imaging, statistics, bayesian, phase-retrieval, inverse-problem <br /> <br /> ]
 citation:
   type: article-journal
@@ -68,10 +68,10 @@ The forward model of holographic CDI defines a sampling distribution for the obs
 
 * Penalized maxmum likelihood (MLE):  Solve with optimization, do not adjust for unconstraining transform.
 * Maximum a posteriori (MAP): Solve with optimization, adjusting for the unconstraining transform.
-* Variational Bayes (VB): Solve by minimizing Kullback-Leibler divergence from an approximate posterior to the true posterior.
+* Variational Bayes (VB): Solve by minimizing Kullback-Leibler divergence from an approximate posterior to the true posterior and importance resampling.
 * Markov chain Monte Carlo (MCMC): Solve by sampling from the posterior and averaging.
 
-Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for analyzing fits to data.  
+Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for summarizing fits to data.  
 
 @barmherzig2022 used two different optimizers for maximum likelihood inference, conjugate gradient and trust regions. We will employ limited memory quasi-Newton optimization in the form of the limited-memory BFGS (L-BFGS) optimizer [@zhu1997], which tends to outperform both conjugate gradient and trust-region methods for relatively simple optimization problems in moderately high dimensions like this one.  If the model adjusts for the inverse log odds (logistic) transform, the optimizer produces a maximum a posteriori (MAP) estimate, whereas if the model does not adjust for the change of variables, the optimizer produces a penalized maximum likelihood estimate (MLE).
 
@@ -79,14 +79,14 @@ We employ two different Bayesian methods for solving the inverse problem, variat
 
 ## Python boilerplate
 
-Generating the data requires the standard Python numerical libraries `scipy.stats` and `numpy`, as well as the plotting library `matplotlib` to display results.  Stan is accessed through the `cmdstanpy` and `bridgestan` interfaces.
+Generating the data requires the standard Python numerical libraries `scipy.stats` and `numpy`, as well as the plotting library `matplotlib` to display results.  Stan is accessed through the `cmdstanpy` and `bridgestan` interfaces.  There is also code for converting RGB-coded images to grayscale.
 
 ```{python}
 import cmdstanpy as csp
 import bridgestan as bs
 import numpy as np
-import scipy as sp
-
+import scipy as s
+import os
 import matplotlib as mpl
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
@@ -109,46 +109,77 @@ def rgb2gray(rgb):
     return gray
 ```
 
-# The generative statistical process
+# Test images
 
-For simplicity of exposition, we will restrict attention to black and white digital images at $256 \times 256$ pixel resolution.  The pixel values will be represented with continuous values in $[0, 1]$, with 0 being black and 1 white. An image is thus an element $X \in [0, 1]^{256 \times 256}.$
+For simplicity of exposition, we will restrict attention to black and white digital images at $256 \times 256$ pixel resolution.  The pixel values will be represented with continuous values in $[0, 1]$, with $0$ being pure black and $1$ pure white. An image is thus an element $X \in [0, 1]^{256 \times 256}.$  Compute time to evaluate the log density and gradients scales linearly in time and memory for each image dimension, which means it scales quadratically in $N$ for an $N \times N$ image.
 
-The generative model here will generate images, represented with a random variable $X \in \mathbb{R}^{N \times N}$ from the prior and then generate photon counts ($Y \in \mathbb{N}^{M_1 \times M_2}$) conditioned on the images.  The counts are wider because they include photon counts for the image, the separator, the reference image, and the padding.
+## Primary test image
 
-The generation of the observations proceeds by generating an image from the prior,
-\begin{equation}
-x \sim p_X(\cdot).
-\end{equation}
-Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution,
-\begin{equation}
-y \sim p_{Y \mid X}(\cdot \mid x).
-\end{equation}
-
-## The prior
-
-Because the space $[0, 1]^{256 \times 256}$ is compact, it would be possible to use a uniform prior.  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021].  Instead, we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$  The ICAR prior is defined by
-\begin{equation}
-p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \ \sigma),
-\end{equation}
-where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  This distribution can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  An alternative would be to place a prior directly on the unconstrained log odds of the pixel values, with independent standard logistic distributions producing uniform distributions when transformed back to $(0, 1)$.
-
-It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do that here.  
-
-## Sample data
-
-Rather than generating test files from the prior, which is not strong enough to give realistic images, we instead use a set of test images.  We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus). It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
+We will concentrate on the target image of a [mimivirus](https://en.wikipedia.org/wiki/Mimivirus), a type of [giant virus](https://en.wikipedia.org/wiki/Giant_virus). It is giant in the sense that its genome is over one million base pairs in length.  The mimivirus is structured as an icosahedral capsid of approximately 400nm with filaments extending another 100nm around the capsid.  An image is shown in @fig-mimivirus.
 
 ```{python}
 #| fig-cap: Image of a mimivirus.  The capsid is an icosahedron 400nm across with 100nm filaments. Image copyright 2008 by E. Ghigo J. Kartenbeck, P. Lien, L. Pelkmans, C. Capo, J.L. Mege, and D. Raoult D. 2008, and distributed under the [CC BY 2.5](https://creativecommons.org/licenses/by/2.5) license.
 #| label: fig-mimivirus
 #| fig-align: center
-#| fig_pos: 't'
+#| fig-pos: 't'
 
 X_src = rgb2gray(mpimg.imread('mimivirus.png'))
 plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
 ```
 
-## The reference image
+## Secondary test images
+
+In addition to the mimivirus image, we will also simulate and reconstruct the ten images show in @fig-test_img.
+
+```{python}
+#| fig-cap: Images form the USC/SIPI test repository.  First row, left to right) female [Bell Labs?], house, tree, jelly beans, moon surface.  Second row, left to right) aerial, airplane, clock, resolution chart, chemical plant.
+#| label: fig-test_img
+#| fig-align: center
+#| fig-pos: 't'
+
+img_dir = 'img/usc-sipi'
+image_files = sorted([f for f in os.listdir(img_dir) if f.endswith('.png')])
+fig, axs = plt.subplots(2, 5, figsize=(20, 8))
+axs = axs.ravel()
+for i, ax in enumerate(axs):
+    img_path = os.path.join(img_dir, image_files[i])
+    gray_img = mpimg.imread(img_path)
+    ax.imshow(gray_img, cmap='gray')
+plt.tight_layout()
+plt.show()
+```
+
+
+# The generative model
+
+The generative model here will generate images, represented with a random variable $X \in \mathbb{R}^{N \times N}$ from the prior and then generate photon counts ($Y \in \mathbb{N}^{M_1 \times M_2}$) conditioned on the images.  The counts are wider because they include photon counts for the image, the separator, the reference image, and the padding.
+
+The generation of the observations proceeds by generating an image from the prior,
+\begin{equation}
+x \sim p_X\,(\cdot).
+\end{equation}
+Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution,
+\begin{equation}
+y \sim p_{Y \mid X}\,(\cdot \mid x).
+\end{equation}
+
+## The prior
+
+Because the space $[0, 1]^{256 \times 256}$ has finite hypervolume, it would be possible to use a uniform prior over pixel values.  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021], a promising modern approach to which is based on diffusion models [@graikos2022,@fei2023].
+
+Instead of a uniform prior or natural image prior, we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$ These priors were originally developed for image denoising. The ICAR prior is defined by
+\begin{equation}
+p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \ \sigma),
+\end{equation}
+where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  This distribution can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do that here.  
+
+An alternative parameterization that we do not consider here would place a prior directly on the unconstrained log odds of the pixel values, with independent standard logistic distributions producing uniform distributions when transformed back to $(0, 1)$; the boundaries cannot be included in the transform as they wold correspond to $\pm \infty$ on the unconstrained scale.
+
+## The sampling distribution
+
+The sampling distribution proceeds in two stages.  First, the image is combined with a separator and a reference image and then padded.  The result defines the shape of the sensor grid.  A discrete Fourier transform is applied to the padded and separated image and reference, the squared absolute values of which determine the proportion of photons that are expected to arrive at the specified sensor.  Second, the expected proportions are normalized for the intensity of the beam and then the photons are generated according to a simple Poisson process.
+
+### The reference image
 
 For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978].  The pattern used here is known as a *uniformly redundant array* (URA) [@fenimore1978].  The URA is depicted in @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
 
@@ -156,13 +187,68 @@ For the experiments here, we use an idealized optimal reference image $R$, the u
 #| fig-cap: Uniformly redundant array. This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.
 #| label: fig-ura
 #| fig-align: center
-#| fig_pos: 't'
+#| fig-pos: 't'
 
 R = np.loadtxt('URA.csv', delimiter=",", dtype=int)
 plt.imshow(R, cmap='gray')
 ```
 
-There is also a purely black separator of the same size as the image, which we will denote as $Z$ because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen.'
+### The seperator and padding
+
+There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.  
+
+After the image, separator, and padding are concatenated left-to-right (i.e., by column), the result $\textrm{concat}(X, Z, R)$ is padded with zero values on the right and on the bottom to a final size of $M_1 \cdot M_2.$  Let $\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)$ be the result.
+
+
+### Fourier transform and normalization
+
+The concatenated and padded image $\textrm{pad}(\textrm{cat}(X, Z, R), M_1, M_2)$ is next put through a discrete, two-dimensional fast Fourier transform (FFT).  The resulting complex values are then reduced to their magnitudes using the absolute value function and then squared.  The resulting variable $V$ is the FFT-transformed and squared values,
+\begin{equation}
+V = \left| \, \strut  \textrm{fft2}(\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)) \, \right|^2.
+\end{equation}
+Next, this value is normalized by dividing by the mean of the values to define the expected number of photons at each sensor in the padded, concatenated image,
+\begin{equation}
+\lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V,
+\end{equation}
+where $N_p$ is the total number of photons observed, which is supplied as a constant.
+
+### Beamstop
+
+To avoid the coherent X-ray beam from melting the biomolecule and destroying the sensors, the low frequency elements are blocked with a beamstop.  This prevents the photons from getting through and result in artifical zero counts.
+
+The beamstop has a configurable radius $r$, with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $2 \cdot r - 1$ square that's stopped.
+
+
+### Poisson photon sampling
+
+Finally, the actual number of photons at each position is generated as a Poisson process,
+\begin{equation}
+Y_{i, j} \sim
+\begin{cases}
+\textrm{Poisson}(\lambda_{i, j}) & \textrm{ if } \textrm{beamstop}(i, j) = 0
+\\
+\textrm{Poisson}(0) & \textrm{ if } \textrm{beamstop}(i, j) = 1.
+\end{cases}
+\end{equation}
+
+This completes the definition of the sampling distribution (equivalently, the likelihood).  This representation is using the Poisson trick that reduces to the same probability mass function for $y$ as a multinomial with probabilities proportional to $V$ and a total of $N_p$ photons per receptor on average.  In general, suppose we have a multinomial of the form
+\begin{equation}
+\textrm{multinomial}\left( y \mid \theta, \textrm{sum}(y) \right),
+\end{equation}
+where, in our case,
+\begin{equation}
+\textrm{sum}(y) = N_p \cdot M_1 \cdot M_2
+\end{equation}
+and
+\begin{equation}
+\theta = N_p \cdot \frac{V \cdot \textrm{beamstop}}{\textrm{mean}(V \cdot \textrm{beamstop})}.
+\end{equation}
+Conditiononed on having observed $y,$ the same likelihood contribution up to a multiplicative constant is given by
+\begin{equation}
+\prod_{i = 1}^{M_1} \prod_{j = 1}^{M_2} \textrm{Poisson}(y_{i, j} \mid \theta_{i, j} \cdot \textrm{sum}(y)).
+\end{equation}
+
+
 
 
 # References {.unnumbered}

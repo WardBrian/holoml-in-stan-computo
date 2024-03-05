@@ -72,7 +72,7 @@ data {
 }
 transformed data {
   matrix[M1, M2] beamstop = beamstop_gen(M1, M2, r);  // beam stop
-  matrix[d, N] Z = rep_matrix(0, d, N);               // seperator
+  matrix[d, N] Z = rep_matrix(0, d, N);               // separator
   matrix[N, N + d] Z_R = append_col(Z, R);            // separator + ref
 }
 parameters {
@@ -81,8 +81,8 @@ parameters {
 model {
   X ~ icar(sigma);
   matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
-  matrix[M1, M2] Y = square(abs(pad_fft2(X_Z_R, M1, M2)));
-  matrix[M1, M2] lambda = N_p / mean(Y) * Y; 
+  matrix[M1, M2] V = square(abs(pad_fft2(X_Z_R, M1, M2)));
+  matrix[M1, M2] lambda = N_p / mean(V) * V; 
   for (m1 in 1 : M1) {
     for (m2 in 1 : M2) {
       if (!beamstop[m1, m2]) {
