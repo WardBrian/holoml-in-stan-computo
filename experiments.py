@@ -87,15 +87,15 @@ def sim_Y(source_png, N_p, R, r, sigma, seed):
         'd': N,
         'M1': M1,
         'M2': M2,
-        'Y_tilde': Y_tilde,
+        'Y': Y_tilde,
         'r': r,
-        'sigma': sigma
+        'sigma': 10,
         }
     return X_src, data
 
 seed = 15789087
 R = np.loadtxt('URA.csv', delimiter=",", dtype=int).tolist()
-X_src, data = sim_Y('mimivirus.png', N_p=1, R = R, r=13, sigma=1, seed=567819)
+X_src, data = sim_Y('mimivirus.png', N_p=1, R = R, r=13, sigma=10, seed=567819)
 
 model = csp.CmdStanModel(stan_file = 'holoml.stan')
 X_hat_mle, fit_mle = mle(model, data, seed)
@@ -113,7 +113,6 @@ X_hat_pf_logit = np.array(logit(X_hat_pf), order='C')
 X_draw_pf_logit = np.array(logit(X_draw_pf), order='C')
 
 print(f" log posterior: Source: {bs_model.log_density(X_src_logit):10.1f}  MAP: {bs_model.log_density(X_hat_map_logit):10.1f}  MLE: {bs_model.log_density(X_hat_mle_logit):10.1f}  PF(mean): {bs_model.log_density(X_hat_pf_logit):10.1f}  PF(draw): {bs_model.log_density(X_draw_pf_logit):10.1f}  (higher better)")
-
 print(f" SSIM: MAP: {ssim_unit(X_src, X_hat_map):6.3f}  MLE: {ssim_unit(X_src, X_hat_mle):6.3f}  PF(mean): {ssim_unit(X_src, X_hat_pf):6.3f}  PF(draw): {ssim_unit(X_src, X_draw_pf):6.3f}   MCMC(mean): {ssim_unit(X_src, X_hat_mcmc):6.3f}  MCMC(draw): {ssim_unit(X_src, X_draw_mcmc):6.3f}  (higher better)")
 
 print(f"MSSIM: MAP: {msssim_unit(X_src, X_hat_map):6.3f}  MLE: {msssim_unit(X_src, X_hat_mle):6.3f}  PF(mean): {msssim_unit(X_src, X_hat_pf):6.3f}  PF(draw): {msssim_unit(X_src, X_draw_pf):6.3f}  MCMC(mean): {msssim_unit(X_src, X_hat_mcmc):6.3f}  MCMC(draw): {msssim_unit(X_src, X_draw_mcmc):6.3f}  (higher better)")

@@ -24,6 +24,16 @@ functions {
       = rep_array(1, r - 1, r - 1);
     return B_cal;
   }
+
+  /**
+   * Return the number of pixels stopped with the specified beamstop radius. 
+   *
+   * @param r beamstop radius
+   * @return size of beamstop in pixels
+   */
+  int beamstop_size(int r) {
+    return r * r + 2 * (r - 1) * r + (r - 1) * (r - 1);
+  }
   
   /**
    * Return the matrix corresponding to the fast Fourier transform of
@@ -74,6 +84,18 @@ transformed data {
   array[M1, M2] int<lower=0, upper=1> beamstop = beamstop_gen(M1, M2, r);
   matrix[d, N] Z = rep_matrix(0, d, N);      // seperator
   matrix[N, N + d] Z_R = append_col(Z, R);   // separator + ref
+  int unstopped_size = M1 * M2 - beamstop_size(r);
+  array[unstopped_size] int<lower=0> Y_stop;
+  int pos = 1;
+  for (m2 in 1:M2) {  // column major matches to_vector(matrix)
+    for (m1 in 1:M1) {
+      if (!beamstop[m1, m2]) {
+	Y_stop[pos] = Y[m1, m2];
+	pos += 1;
+      }
+    }
+  }
+  print("pos = ", pos, "  unstopped_size = ", unstopped_size);
 }
 parameters {
   matrix[N, N] logit_X;  // log-odds transformed image
@@ -85,12 +107,16 @@ model {
   logit_X ~ icar(sigma);
   matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
   matrix[M1, M2] V = square(abs(pad_fft2(X_Z_R, M1, M2)));
-  matrix[M1, M2] lambda = N_p / mean(V) * V; 
-  for (m1 in 1 : M1) {
-    for (m2 in 1 : M2) {
+  vector[unstopped_size] theta;
+  int n = 1;
+  for (m2 in 1:M2) {
+    for (m1 in 1:M1) {
       if (!beamstop[m1, m2]) {
-        Y[m1, m2] ~ poisson(lambda[m1, m2]);
+	theta[n] = V[m1, m2];
+	n += 1;
       }
     }
   }
+  theta /= sum(theta);
+  Y_stop ~ multinomial(theta);
 }
