@@ -94,16 +94,16 @@ def sim_Y(source_png, N_p, R, r, sigma, seed):
     return X_src, data
 
 seed = 15789087
-R = np.loadtxt('URA.csv', delimiter=",", dtype=int).tolist()
-X_src, data = sim_Y('mimivirus.png', N_p=1, R = R, r=13, sigma=10, seed=567819)
+R = np.loadtxt('../img/URA.csv', delimiter=",", dtype=int).tolist()
+X_src, data = sim_Y('../img/mimivirus.png', N_p=1, R = R, r=13, sigma=10, seed=567819)
 
-model = csp.CmdStanModel(stan_file = 'holoml.stan')
+model = csp.CmdStanModel(stan_file = '../stan/holoCDI.stan')
 X_hat_mle, fit_mle = mle(model, data, seed)
 X_hat_map, fit_map = mode(model, data, seed)
 X_hat_pf, X_draw_pf, fit_pf = vb(model, data, seed)
 X_hat_mcmc, X_draw_mcmc, draws_mcmc_X = mcmc(model, data, fit_pf, seed)
 
-bs_model = bs.StanModel('holoml.stan', json.dumps(data))
+bs_model = bs.StanModel('../stan/holoCDI.stan', json.dumps(data))
 X_src_copy = X_src.copy()
 X_src_copy[X_src_copy == 0] = 0.001  # avoids boundary on log odds scale
 X_src_logit = np.array(np.float64(logit(X_src_copy)), order='C')

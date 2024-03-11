@@ -90,12 +90,14 @@ import os
 import matplotlib as mpl
 import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
+import plotnine as pn
+import pandas as pd
 
 # disable axes drawing, since we are showing images
-mpl.rc('axes.spines', top=False, bottom=False, left=False, right=False)
-mpl.rc('axes', facecolor='white')
-mpl.rc("xtick", bottom=False, labelbottom=False)
-mpl.rc("ytick", left=False, labelleft=False)
+# mpl.rc('axes.spines', top=False, bottom=False, left=False, right=False)
+# mpl.rc('axes', facecolor='white')
+# mpl.rc("xtick", bottom=False, labelbottom=False)
+# mpl.rc("ytick", left=False, labelleft=False)
 
 def rgb2gray(rgb):
     """Convert a nxmx3 RGB array to a grayscale nxm array.
@@ -123,7 +125,7 @@ We will concentrate on the target image of a [mimivirus](https://en.wikipedia.or
 #| fig-align: center
 #| fig-pos: 't'
 
-X_src = rgb2gray(mpimg.imread('mimivirus.png'))
+X_src = rgb2gray(mpimg.imread('img/mimivirus.png'))
 plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
 ```
 
@@ -152,36 +154,91 @@ plt.show()
 
 # The generative model
 
-The generative model here will generate images, represented with a random variable $X \in \mathbb{R}^{N \times N}$ from the prior and then generate photon counts ($Y \in \mathbb{N}^{M_1 \times M_2}$) conditioned on the images.  The counts are wider because they include photon counts for the image, the separator, the reference image, and the padding.
+## Image and photon sensor representations
 
-The generation of the observations proceeds by generating an image from the prior,
+An image is represented by a random matrix of continuous pixel values between 0 and 1,
+$X \in [0, 1]^{N \times N}$.  Typically we will be using a representation that excludes the endpoints other than through numerical underflow or rounding.  The photons measured at the sensor are represented by a random matrix of discrete counts for the sensor grid, $Y \in \mathbb{N}^{M_1 \times M_2}.$
+
+## Unconstrained representation and change of variables correction
+
+It is more convenient for both sampling and optimizatio to work over an unconstrained parameterization with support in all of $\mathbb{R}^D$ for some $D.$  As an alternative to the constrained image representation $X$, consider the smooth, bijective, and strictly monotonic log odds transform applied elementwise,
+\begin{equation}
+U = \textrm{logit}(X),
+\end{equation}
+where
+\begin{equation}
+\textrm{logit}(v) = \log \left( \frac{v}{1 - v} \right)
+\qquad
+\textrm{logit}^{-1}(u) = \frac{1}{1 + \exp(-u)}.
+\end{equation}
+If $p_X$ has support on $(0, 1)^{N \times N},$ then $p_U$ has support on all of $\mathbb{R}^{N \times N}.$  The density of $U$ is given by the change of variables formula,
+\begin{equation}
+p_U(u) = p_X(\textrm{logit}^{-1}(u)) \cdot \left| \prod_{i, j} (\textrm{logit}^{-1})'(u_{i,j}) \right|,
+\end{equation}
+where the derivative of the logistic sigmoid $\textrm{logit}^{-1}$ is
+\begin{equation}
+\left(\textrm{logit}^{-1}\right)'(u)
+= \textrm{logit}^{-1}(u) \cdot \left( 1 - \textrm{logit}^{-1}(u) \right).
+\end{equation}
+On the log scale,
+\begin{equation}
+\log p_U(u) = \log p_X(\textrm{logit}^{-1}(u))
+ + \sum_{i, j} \log \left( (\textrm{logit}^{-1})'(u_{i,j}) \right).
+\end{equation}
+
+
+
+## Generative process overview
+
+The first step is to generate an image from the prior,
 \begin{equation}
 x \sim p_X\,(\cdot).
 \end{equation}
-Then, given the image $x$, generate the photons observed at the sensors $y$ conditoned on the image $x$ using the sampling distribution,
+Then, given the image $x$, the second and final step is to generate the photons observed at the sensors $y$ conditoned on the image $x,$ using the sampling distribution,
 \begin{equation}
 y \sim p_{Y \mid X}\,(\cdot \mid x).
 \end{equation}
 
+
 ## The prior
 
-Because the space $[0, 1]^{256 \times 256}$ has finite hypervolume, it would be possible to use a uniform prior over pixel values.  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021], a promising modern approach to which is based on diffusion models [@graikos2022,@fei2023].
+### Uniform prior is possible
+
+Because the space $[0, 1]^{256 \times 256}$ has finite hypervolume, it would be possible to use a uniform prior over pixel values, $p_X(x) \propto 1.$  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021], a promising modern approach to which is based on diffusion models [@graikos2022,@fei2023].
+
+### ICAR prior in constrained space
 
 Instead of a uniform prior or natural image prior, we will use a simple intrinsic conditional autoregressive (ICAR) prior [@besag1991], which penalizes differences between adjacent pixels according to a scale $\sigma > 0.$ These priors were originally developed for image denoising. The ICAR prior is defined by
 \begin{equation}
 p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \ \sigma),
 \end{equation}
-where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$ and where $\sigma$ is the scale of the normal distribution.  This distribution can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do that here.  
+where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$, and where $\sigma$ is the scale of the normal distribution.  This density $p_X$ can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do evaluate that option here.
 
-An alternative parameterization that we do not consider here would place a prior directly on the unconstrained log odds of the pixel values, with independent standard logistic distributions producing uniform distributions when transformed back to $(0, 1)$; the boundaries cannot be included in the transform as they wold correspond to $\pm \infty$ on the unconstrained scale.
+Because we will be sampling using the unconstrained space $U,$ we apply the change of variables from $X$ to derive the density in the unconstrained space,
+\begin{align}
+p_U(u) \propto { } &
+\prod_{(m, n) \sim (m', n')}
+\textrm{normal}\!\left(\textrm{logit}^{-1}(u_{m,n}) \mid \textrm{logit}^{-1}(u_{m',n'}), \ \sigma\right)
+\\
+& 
+\hspace*{1em} \cdot \prod_{m, n} \textrm{logit}^{-1}(u_{m, n}) \cdot (1 - \textrm{logit}^{-1}(u_{m,n})).
+\end{align}
+
+### ICAR prior in unconstrained space
+
+An ICAR prior may also be placed directly on the unconstrained values,
+\begin{equation}
+p_U(u) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(u_{m,n} \mid u_{m',n'}, \ \tau),
+\end{equation}
+with $\tau$ being the scale of variation of the unconstrained parameters.  As before, $X = \textrm{logit}^{-1}(u)$ recovers the pixel values for use downstream in the model.  Conveniently, when parameterized this way, the Jacobian adjustment is not necessary because a distribution is not being placed on the constrained parameters.  This approach would not be feasible for natural image priors placed directly on $X$.
 
 ## The sampling distribution
 
-The sampling distribution proceeds in two stages.  First, the image is combined with a separator and a reference image and then padded.  The result defines the shape of the sensor grid.  A discrete Fourier transform is applied to the padded and separated image and reference, the squared absolute values of which determine the proportion of photons that are expected to arrive at the specified sensor.  Second, the expected proportions are normalized for the intensity of the beam and then the photons are generated according to a simple Poisson process.
+The sampling distribution proceeds in several stages.  First, the image is combined with a separator and a reference image and then padded.  The result defines the shape of the sensor grid.  Next, a discrete Fourier transform is applied to the padded and separated image and reference, the squared absolute values of which determine the proportion of photons that are expected to arrive at the specified sensor.  Then a beamstop is applied to the model where it is applied in practice to prevent damage to the sample or sensors.  Finally, the expected proportions are normalized for the intensity of the beam and then the photons are generated according to a simple Poisson process.
 
 ### The reference image
 
-For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978].  The pattern used here is known as a *uniformly redundant array* (URA) [@fenimore1978].  The URA is depicted in @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
+For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978]; see @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
 
 ```{python}
 #| fig-cap: Uniformly redundant array. This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.
@@ -189,66 +246,131 @@ For the experiments here, we use an idealized optimal reference image $R$, the u
 #| fig-align: center
 #| fig-pos: 't'
 
-R = np.loadtxt('URA.csv', delimiter=",", dtype=int)
+R = np.loadtxt('img/URA.csv', delimiter=",", dtype=int)
 plt.imshow(R, cmap='gray')
 ```
 
-### The seperator and padding
+### The seperator and reference image
 
-There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.  
+There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen, so that its width $d$ is equal to $N,$ the pixel width of the image.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.  
 
 After the image, separator, and padding are concatenated left-to-right (i.e., by column), the result $\textrm{concat}(X, Z, R)$ is padded with zero values on the right and on the bottom to a final size of $M_1 \cdot M_2.$  Let $\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)$ be the result.
+
+```{python}
+#| fig-cap: Source image, zero separator, and reference image concatenated.
+#| label: fig-separator
+#| fig-align: center
+#| fig-pos: 't'
+
+N = np.shape(X_src)[0]
+d = N
+X0R = np.concatenate([X_src, np.zeros((N, d)), R], axis=1)
+plt.imshow(X0R, cmap='gray')
+```
+
+It is this combination of image, separator, and reference are the ones subjected to a beam of X-rays.
+
+
+### Padding
+
+The original image, separator and reference image are next padded to the right and below up to a size of $M_1 \times M_2$.  Sensors are placed at each position in the padded matrix.  The padding has the effect of interpolating in image space.  Let
+\begin{equation}
+P = \textrm{pad}(\textrm{cat}(X^{\textrm{src}}, Z, R), M_1, M_2)
+\end{equation}
+be the padded version of the image, separator, and reference image, where $X^{\textrm{src}}$ is the source image, $Z$ is a zero matrix, and $R$ is the reference image.  The padding is taken to be twice the size of the material imaged, so that $M_1 = 6 \cdot 256$ and $M_2 = 2 \cdot 256,$ which brings the total number of sensors to 786,432, just shy of one megapixel. 
 
 
 ### Fourier transform and normalization
 
-The concatenated and padded image $\textrm{pad}(\textrm{cat}(X, Z, R), M_1, M_2)$ is next put through a discrete, two-dimensional fast Fourier transform (FFT).  The resulting complex values are then reduced to their magnitudes using the absolute value function and then squared.  The resulting variable $V$ is the FFT-transformed and squared values,
+The concatenated and padded image $P$ is next put through a discrete, two-dimensional fast Fourier transform (FFT), the values of which are reduced to their absolute values (i.e., magnitudes), and squared, resulting in a matrix of values that is proportional to the expected intensity of sensor readings given the image, separator, reference, and padding,
 \begin{equation}
-V = \left| \, \strut  \textrm{fft2}(\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)) \, \right|^2.
+V = \left| \, \textrm{fft2}(P) \, \right|^2.
 \end{equation}
-Next, this value is normalized by dividing by the mean of the values to define the expected number of photons at each sensor in the padded, concatenated image,
+$P$ is of size $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-dimensional FFTs of size 512 and 512 one-dimensional FFTs of size 1536.
+
+Let $N_p$ be the number of photons expected per sensor.  This is used like an exposure value in a Poisson model to set the scale of the expected photon counts to be 
 \begin{equation}
-\lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V,
+\lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V.
 \end{equation}
-where $N_p$ is the total number of photons observed, which is supplied as a constant.
+
 
 ### Beamstop
 
-To avoid the coherent X-ray beam from melting the biomolecule and destroying the sensors, the low frequency elements are blocked with a beamstop.  This prevents the photons from getting through and result in artifical zero counts.
+To avoid the coherent X-ray beam from melting the biomolecule and destroying the sensors, the low frequency elements are blocked with a beamstop.  This blockage means zero photons arrive at sensors in the stopped positions and the image must be interpolated from what's left.
 
-The beamstop has a configurable radius $r$, with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $2 \cdot r - 1$ square that's stopped.
+The beamstop has a configurable radius $r$, with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square that's stopped.  A plot of the beamstop is shown in @fig-beamstop.
+
+```{python}
+#| fig-cap: Illustration of beamstop.  The solid blue rectangles are the positions which are stopped, meaning that photon flux is not measured at those positions.
+#| label: fig-beamstop
+#| fig-align: center
+#| fig-pos: 't'
+
+plot = (
+  pn.ggplot()
+  + pn.geom_segment(pn.aes(x=0, y=0, xend=0, yend=4), color="black")
+  + pn.geom_segment(pn.aes(x=0, y=4, xend=12, yend=4), color="black")
+  + pn.geom_segment(pn.aes(x=12, y=4, xend=12, yend=0), color="black")
+  + pn.geom_segment(pn.aes(x=12, y=0, xend=0, yend=0), color="black")
+  # lower left
+  + pn.geom_segment(pn.aes(x=0, y=0, xend=0, yend=1), color="blue")
+  + pn.geom_segment(pn.aes(x=0, y=1, xend=3, yend=1), color="blue")
+  + pn.geom_segment(pn.aes(x=3, y=1, xend=3, yend=0), color="blue")
+  + pn.geom_segment(pn.aes(x=3, y=0, xend=0, yend=0), color="blue")
+  + pn.geom_rect(pn.aes(xmin=0, xmax=3, ymin=0, ymax=1), fill='blue', alpha=0.5)
+  # lower right
+  + pn.geom_segment(pn.aes(x=9, y=0, xend=9, yend=1), color="blue")
+  + pn.geom_segment(pn.aes(x=9, y=1, xend=12, yend=1), color="blue")
+  + pn.geom_segment(pn.aes(x=12, y=1, xend=12, yend=0), color="blue")
+  + pn.geom_segment(pn.aes(x=12, y=0, xend=9, yend=0), color="blue")
+  + pn.geom_rect(pn.aes(xmin=9, xmax=12, ymin=0, ymax=1), fill='blue', alpha=0.5)
+  # upper left
+  + pn.geom_segment(pn.aes(x=0, y=3, xend=0, yend=4), color="blue")
+  + pn.geom_segment(pn.aes(x=0, y=4, xend=3, yend=4), color="blue")
+  + pn.geom_segment(pn.aes(x=3, y=4, xend=3, yend=3), color="blue")
+  + pn.geom_segment(pn.aes(x=3, y=3, xend=0, yend=3), color="blue")
+  + pn.geom_rect(pn.aes(xmin=0, xmax=3, ymin=3, ymax=4), fill='blue', alpha=0.5)
+  # upper right
+  + pn.geom_segment(pn.aes(x=9, y=3, xend=9, yend=4), color="blue")
+  + pn.geom_segment(pn.aes(x=9, y=4, xend=12, yend=4), color="blue")
+  + pn.geom_segment(pn.aes(x=12, y=4, xend=12, yend=3), color="blue")
+  + pn.geom_segment(pn.aes(x=12, y=3, xend=9, yend=3), color="blue")
+  + pn.geom_rect(pn.aes(xmin=9, xmax=12, ymin=3, ymax=4), fill='blue', alpha=0.5)
+  + pn.scale_x_continuous(breaks=[0, 3, 9, 12],
+                          labels=["1", "r", "M1-r+2", "M1"])
+  + pn.scale_y_continuous(breaks=[0, 1, 3, 4],
+                          labels=["1", "r", "M2-r+2", "M2"])
+  + pn.theme(figure_size=(6, 2),
+             plot_background=pn.element_rect(fill="white"),
+             panel_background=pn.element_rect(fill="white"),
+             axis_title=pn.element_blank(),
+	     axis_text_x=pn.element_text(size=10, color="black", angle=0),
+             axis_text_y=pn.element_text(size=10, color="black"),
+	     axis_ticks=pn.element_blank(),
+	     axis_line=pn.element_blank(),
+             # axis_ticks_length_major=5,
+	     # axis_line=pn.element_line(color="black"),
+             panel_grid=pn.element_blank())
+)
+plot
+```
+
+
 
 
 ### Poisson photon sampling
 
-Finally, the actual number of photons at each position is generated as a Poisson process,
+Finally, the actual number of photons at each position is generated as a Poisson process, based on the rate $\lambda.$
 \begin{equation}
 Y_{i, j} \sim
 \begin{cases}
 \textrm{Poisson}(\lambda_{i, j}) & \textrm{ if } \textrm{beamstop}(i, j) = 0
-\\
+\\[4pt]
 \textrm{Poisson}(0) & \textrm{ if } \textrm{beamstop}(i, j) = 1.
 \end{cases}
 \end{equation}
 
-This completes the definition of the sampling distribution (equivalently, the likelihood).  This representation is using the Poisson trick that reduces to the same probability mass function for $y$ as a multinomial with probabilities proportional to $V$ and a total of $N_p$ photons per receptor on average.  In general, suppose we have a multinomial of the form
-\begin{equation}
-\textrm{multinomial}\left( y \mid \theta, \textrm{sum}(y) \right),
-\end{equation}
-where, in our case,
-\begin{equation}
-\textrm{sum}(y) = N_p \cdot M_1 \cdot M_2
-\end{equation}
-and
-\begin{equation}
-\theta = N_p \cdot \frac{V \cdot \textrm{beamstop}}{\textrm{mean}(V \cdot \textrm{beamstop})}.
-\end{equation}
-Conditiononed on having observed $y,$ the same likelihood contribution up to a multiplicative constant is given by
-\begin{equation}
-\prod_{i = 1}^{M_1} \prod_{j = 1}^{M_2} \textrm{Poisson}(y_{i, j} \mid \theta_{i, j} \cdot \textrm{sum}(y)).
-\end{equation}
-
-
+This completes the definition of the sampling distribution;  the likelihood is just the sampling distribution viewed as a function of the parameters for fixed data. 
 
 
 # References {.unnumbered}
@@ -262,5 +384,5 @@ Conditiononed on having observed $y,$ the same likelihood contribution up to a m
 ## A. Stan Program {#full-code .appendix .unnumbered}
 
 ```stan
-{{< include holoml.stan >}}
+{{< include stan/holoCDI.stan >}}
 ```
