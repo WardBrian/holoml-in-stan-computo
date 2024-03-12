@@ -127,6 +127,9 @@ We will concentrate on the target image of a [mimivirus](https://en.wikipedia.or
 
 X_src = rgb2gray(mpimg.imread('img/mimivirus.png'))
 plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
+plt.xticks([0, 127, 255], [1, 128, 256])
+plt.yticks([0, 127, 255], [1, 128, 256])
+plt.show()
 ```
 
 ## Secondary test images
@@ -147,6 +150,7 @@ for i, ax in enumerate(axs):
     img_path = os.path.join(img_dir, image_files[i])
     gray_img = mpimg.imread(img_path)
     ax.imshow(gray_img, cmap='gray')
+    ax.axis('off')
 plt.tight_layout()
 plt.show()
 ```
@@ -248,6 +252,9 @@ For the experiments here, we use an idealized optimal reference image $R$, the u
 
 R = np.loadtxt('img/URA.csv', delimiter=",", dtype=int)
 plt.imshow(R, cmap='gray')
+plt.xticks([0, 127, 255], [1, 128, 256])
+plt.yticks([0, 127, 255], [1, 128, 256])
+plt.show()
 ```
 
 ### The seperator and reference image
@@ -266,6 +273,9 @@ N = np.shape(X_src)[0]
 d = N
 X0R = np.concatenate([X_src, np.zeros((N, d)), R], axis=1)
 plt.imshow(X0R, cmap='gray')
+plt.xticks([0, 255, 511, 767], [1, 256, 512, 768])
+plt.yticks([0, 127, 255], [1, 128, 256])
+plt.show()
 ```
 
 It is this combination of image, separator, and reference are the ones subjected to a beam of X-rays.
