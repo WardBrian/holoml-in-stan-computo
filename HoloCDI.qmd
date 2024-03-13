@@ -85,7 +85,7 @@ Generating the data requires the standard Python numerical libraries `scipy.stat
 import cmdstanpy as csp
 import bridgestan as bs
 import numpy as np
-import scipy as s
+import scipy as sp
 import os
 import matplotlib as mpl
 import matplotlib.image as mpimg
@@ -126,9 +126,11 @@ We will concentrate on the target image of a [mimivirus](https://en.wikipedia.or
 #| fig-pos: 't'
 
 X_src = rgb2gray(mpimg.imread('img/mimivirus.png'))
+plt.figure(figsize=(3, 3))
 plt.imshow(X_src, cmap='gray', vmin=0, vmax=1)
 plt.xticks([0, 127, 255], [1, 128, 256])
 plt.yticks([0, 127, 255], [1, 128, 256])
+plt.tight_layout()
 plt.show()
 ```
 
@@ -251,9 +253,11 @@ For the experiments here, we use an idealized optimal reference image $R$, the u
 #| fig-pos: 't'
 
 R = np.loadtxt('img/URA.csv', delimiter=",", dtype=int)
+plt.figure(figsize=(3, 3))
 plt.imshow(R, cmap='gray')
 plt.xticks([0, 127, 255], [1, 128, 256])
 plt.yticks([0, 127, 255], [1, 128, 256])
+plt.tight_layout()
 plt.show()
 ```
 
@@ -272,9 +276,11 @@ After the image, separator, and padding are concatenated left-to-right (i.e., by
 N = np.shape(X_src)[0]
 d = N
 X0R = np.concatenate([X_src, np.zeros((N, d)), R], axis=1)
+plt.figure(figsize=(9, 3))
 plt.imshow(X0R, cmap='gray')
 plt.xticks([0, 255, 511, 767], [1, 256, 512, 768])
 plt.yticks([0, 127, 255], [1, 128, 256])
+plt.tight_layout()
 plt.show()
 ```
 
@@ -290,28 +296,93 @@ P = \textrm{pad}(\textrm{cat}(X^{\textrm{src}}, Z, R), M_1, M_2)
 be the padded version of the image, separator, and reference image, where $X^{\textrm{src}}$ is the source image, $Z$ is a zero matrix, and $R$ is the reference image.  The padding is taken to be twice the size of the material imaged, so that $M_1 = 6 \cdot 256$ and $M_2 = 2 \cdot 256,$ which brings the total number of sensors to 786,432, just shy of one megapixel. 
 
 
-### Fourier transform and normalization
+
+### Fourier transform shift
+
+Most fast Fourier transform (FFT) interfaces, including those in Stan, Matlab, and Python, return a shifted result with positive and negative values.  Specifically, values increase in frequency until $N,$ at which point a mirror image copy with negative indexes is appended to the end.  This produces the following order of indexes.
+\begin{equation}
+0, 1, \ldots, N, -N, -N + 1, \ldots, -1.
+\end{equation}
+To get centered values, these are circularly shifted until the lowest frequency, represented at position 0, is in the middle, 
+\begin{equation}
+-N, -N + 1, \ldots -1, 0, 1, \ldots, N-1, N.
+\end{equation}
+With a two dimensional FFT, this happens twice, once for the rows and once for the columns.  This results in a horizontal and vertical shift, which is why the `fftshift` operation swaps the diagonal blocks.  This can be illustrated with the following code, which creates a matrix of distinct entries, shifts it, then inverse shifts it back.  Assuming $A, B, C, D$ are matrices with conforming shapes (for building one big matrix), then
+\begin{equation}
+\textrm{fftshift}\left(
+\begin{bmatrix}
+A & B
+\\
+C & D
+\end{bmatrix}
+\right)
+=
+\begin{bmatrix}
+D & C
+\\
+B & A
+\end{bmatrix}
+\end{equation}
+The elements are swapped across the diagonals, or equivalently, cyclically rotated in the horizontal direction, then in the vertical direction.  Consider the following concrete example matrix.
+
+```{python}
+K = 4
+A = np.ones((K, K), dtype=int)
+for i in range(K):
+    for j in range(K):
+    	A[i, j] = 10 * i + j
+print(f"A =\n{A}\n")
+A_shift = np.fft.fftshift(A)
+```
+Shifting it produces the following shifted matrix, where the center elements move to the corners and vice-versa.
+```{python}
+print(f"fftshift(A) =\n{A_shift}\n")
+```
+Shifting back returns the original matrix.
+```{python}
+A_shift_ishift = np.fft.ifftshift(A_shift)
+print(f"ifftshift(fftshift(A)) =\n{A_shift_ishift}")
+```
+
+### Fourier transform
 
 The concatenated and padded image $P$ is next put through a discrete, two-dimensional fast Fourier transform (FFT), the values of which are reduced to their absolute values (i.e., magnitudes), and squared, resulting in a matrix of values that is proportional to the expected intensity of sensor readings given the image, separator, reference, and padding,
 \begin{equation}
 V = \left| \, \textrm{fft2}(P) \, \right|^2.
 \end{equation}
-$P$ is of size $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-dimensional FFTs of size 512 and 512 one-dimensional FFTs of size 1536.
+$P$ is of size $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-dimensional FFTs of size 512 and 512 one-dimensional FFTs of size 1536.  @fig-fftout shows a visualization of $V$ after the FFT shift to center the low frequencies.
 
-Let $N_p$ be the number of photons expected per sensor.  This is used like an exposure value in a Poisson model to set the scale of the expected photon counts to be 
-\begin{equation}
-\lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V.
-\end{equation}
+```{python}
+#| fig-cap: Squared magnitudes of the FFT of the concatenated and padded image.  The plot is scaled to $\log (1 + V)$ in order to display the pattern.
+#| label: fig-fftout
+#| fig-align: center
+#| fig-pos: 't'
+
+M1 = 256 * 2
+M2 = 256 * 3 * 2
+V = np.abs(np.fft.fft2(X0R, s=(M1, M2)))**2
+log1pV = np.fft.fftshift(np.log1p(V))
+plt.figure(figsize=(9,3))
+plt.imshow(log1pV, cmap="viridis")
+plt.xticks([0, 767, 1535], [1, 768, 1536])
+plt.yticks([0, 255, 511], [1, 256, 512])
+plt.tight_layout()
+plt.show()
+```
+
+Note that this has been shifted.  The result is a lovely tartan pattern with a highly concentrated beam in the low frequencies.
 
 
 ### Beamstop
 
-To avoid the coherent X-ray beam from melting the biomolecule and destroying the sensors, the low frequency elements are blocked with a beamstop.  This blockage means zero photons arrive at sensors in the stopped positions and the image must be interpolated from what's left.
+To avoid the coherent X-ray beam from destroying the sensors with concentrated low-frequencies, the low frequency diffractions are blocked with a beamstop.  This blockage means zero photons arrive at sensors in the stopped positions.  The image must be reconstructed from only the remaining sensors.
 
-The beamstop has a configurable radius $r$, with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square that's stopped.  A plot of the beamstop is shown in @fig-beamstop.
+The beamstop has a configurable radius $r$ and occludes an $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square of censors.  These are placed at the low frequencies, which will be the center of the image when it is centered around zero. After the FFT shift is applied, the stopped regions move to the four corners (see the example in the previous section).
+
+The shifted beamstop can be directly encoded as a matrix with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square that's stopped.  A plot of the beamstop is shown in @fig-beamstop.
 
 ```{python}
-#| fig-cap: Illustration of beamstop.  The solid blue rectangles are the positions which are stopped, meaning that photon flux is not measured at those positions.
+#| fig-cap: Illustration of beamstop after fftshift.  The solid blue rectangles occlude the low frequencies, so that photon flux is not measured at those positions.
 #| label: fig-beamstop
 #| fig-align: center
 #| fig-pos: 't'
@@ -365,12 +436,16 @@ plot = (
 plot
 ```
 
+### Normalization
 
-
+Let $N_p$ be the number of photons expected per sensor.  This is used like an exposure value in a Poisson model to set the scale of the expected photon counts to be 
+\begin{equation}
+\lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V.
+\end{equation}
 
 ### Poisson photon sampling
 
-Finally, the actual number of photons at each position is generated as a Poisson process, based on the rate $\lambda.$
+Finally, the number of photons observed at each sensor in the grid is generated as a Poisson process, based on the rate $\lambda.$
 \begin{equation}
 Y_{i, j} \sim
 \begin{cases}
@@ -379,6 +454,26 @@ Y_{i, j} \sim
 \textrm{Poisson}(0) & \textrm{ if } \textrm{beamstop}(i, j) = 1.
 \end{cases}
 \end{equation}
+
+Given $\lambda,$ a Poisson random number generator can be used to simulate data.  An example is shown in @fig-simy.  
+
+```{python}
+#| fig-cap: Sampled value of $Y$, which is distributed Poisson with rate $\lambda$.  The scaled values $\log(1 + Y)$ is shown.
+#| label: fig-simy
+#| fig-align: center
+#| fig-pos: 't'
+
+N_p = 1  # expected number of photons per sensor
+lamda = N_p / V.mean() * V
+Y = sp.stats.poisson.rvs(lamda, random_state=1234)
+log1pY = np.log1p(Y)
+plt.figure(figsize=(9,3))
+plt.imshow(np.log1p(np.fft.fftshift(Y)), cmap="viridis")
+plt.xticks([0, 767, 1535], [1, 768, 1536])
+plt.yticks([0, 255, 511], [1, 256, 512])
+plt.tight_layout()
+plt.show()
+```
 
 This completes the definition of the sampling distribution;  the likelihood is just the sampling distribution viewed as a function of the parameters for fixed data. 
 
