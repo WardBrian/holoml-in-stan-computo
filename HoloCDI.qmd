@@ -46,9 +46,7 @@ github-user: WardBrian
 repo: "holoml-in-stan-computo"
 draft: true # set to false once the build is running
 published: false # will be set to true once accepted
-monofont: Menlo
-monofontoptions: 
-  - Scale=0.80
+monobackgroundcolor: white
 format:
   computo-html: default
   computo-pdf: default
