@@ -13,16 +13,16 @@ functions {
    * @return M1 x M2 matrix with 1 for stopped and 0 for passed values.
    */
   matrix beamstop_gen(int M1, int M2, int r) {
-    matrix[M1, M2] B_cal = rep_matrix(0, M1, M2);
+    matrix[M1, M2] beamstop = rep_matrix(0, M1, M2);
     if (r == 0) {
-      return B_cal;
+      return beamstop;
     }
-    B_cal[1 : r, 1 : r] = rep_matrix(1, r, r);                // upper left
-    B_cal[1 : r, M2 - r + 2 : M2] = rep_matrix(1, r, r - 1);  // upper right
-    B_cal[M1 - r + 2 : M1, 1 : r] = rep_matrix(1, r - 1, r);  // lower left
-    B_cal[M1 - r + 2 : M1, M2 - r + 2 : M2]                   // lower right
+    beamstop[1 : r, 1 : r] = rep_matrix(1, r, r);                // upper left
+    beamstop[1 : r, M2 - r + 2 : M2] = rep_matrix(1, r, r - 1);  // upper right
+    beamstop[M1 - r + 2 : M1, 1 : r] = rep_matrix(1, r - 1, r);  // lower left
+    beamstop[M1 - r + 2 : M1, M2 - r + 2 : M2]                   // lower right
       = rep_matrix(1, r - 1, r - 1);
-    return B_cal;
+    return beamstop;
   }
 
   /**
@@ -62,7 +62,7 @@ functions {
 data {
   int<lower=0> N;                    // image dimension
   matrix<lower=0, upper=1>[N, N] R;  // registration image
-  int<lower=0, upper=N> d;           // separator
+  int<lower=0> d;                    // separator width
   int<lower=N> M1;                   // padded rows
   int<lower=2 * N + d> M2;           // padded cols
   int<lower=0, upper=M1> r;          // beamstop radius

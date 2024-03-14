@@ -49,7 +49,8 @@ published: false # will be set to true once accepted
 monobackgroundcolor: white
 format:
   computo-html: default
-  computo-pdf: default
+  computo-pdf:
+    top-level-division: section
 jupyter: python3
 ---
 
@@ -90,12 +91,15 @@ import matplotlib.image as mpimg
 import matplotlib.pyplot as plt
 import plotnine as pn
 import pandas as pd
+import logging
+import warnings
 
-# disable axes drawing, since we are showing images
-# mpl.rc('axes.spines', top=False, bottom=False, left=False, right=False)
-# mpl.rc('axes', facecolor='white')
-# mpl.rc("xtick", bottom=False, labelbottom=False)
-# mpl.rc("ytick", left=False, labelleft=False)
+# turn off warning and info messages from Stan
+csp.utils.get_logger().setLevel(logging.ERROR) 
+
+# turn off warnings from plotnine
+warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.filterwarnings( "ignore", module = "plotnine\..*" )
 
 def rgb2gray(rgb):
     """Convert a nxmx3 RGB array to a grayscale nxm array.
@@ -469,7 +473,7 @@ beamstop = np.fft.ifftshift(shifted_beamstop)
 N_p = 1  # expected number of photons per sensor
 lambbda = N_p / V.mean() * V
 preY = sp.stats.poisson.rvs(lambbda, random_state=1234)
-Y = preY * beamstop
+Y = np.array(preY * beamstop, dtype=int)
 
 log1pY = np.log1p(Y)
 plt.figure(figsize=(9,3))
@@ -482,6 +486,220 @@ plt.show()
 
 This completes the definition of the likelihood and with the prior, the forward model for simulating data.
 
+# Stan programs
+
+Stan is an imperative probabilistic programming langauge for statistical models coupled with tools for estimation and posterior analysis [@carpenter2017]. Stan's *Reference Manual* [@standev2024ref] contains complete details and the *User's Guide* [@standev2024users] provides guidance on usage.
+
+A Stan program defines the log posterior up to a normalizing constant, which is usually coded following Bayes's rule as the log joint density, \begin{equation}
+\log p(x \mid y)
+= \log p(y \mid x) + \log p(x) + \textrm{const},
+\end{equation}
+where $x$ is the vector of parameters representing the image and $y$ is the observed photon flux.  It reads the data in and then produces a C++ class that can evaluate the log density and use automatic differentiation to define gradients and Hessians [@carpenter2015].  Stan's inference algorithms are all gradient-based for efficiency and scalability in dimension.  Stan is strongly statically typed, so all variables come with declarations of their type and size.  Stan is an imperative language like R [@rteam2000] or Python [@vanrossum2010], rather than a declarative language like BUGS [@lunn2013], so variables other than parameters being inferred must be defined before they are used.  Stan programs are organized into blocks for data, parameters, and the log density, plus transforms and predictive quantities.  Initially, we will present the constrained model and then later show the few lines that need to change to define an unconstrained model.  The full Stan programs are shown in the appendix.
+
+## The data declaration
+
+This is the block declaring all of the data variables that must be supplied externally.  The Stan variable names mirror those used in the mathematical definitions.  
+
+```stan
+data {
+  int<lower=0> N;                    // image dimension
+  matrix<lower=0, upper=1>[N, N] R;  // registration image
+  int<lower=0> d;                    // separator width
+  int<lower=N> M1;                   // padded rows
+  int<lower=2 * N + d> M2;           // padded cols
+  int<lower=0, upper=M1> r;          // beamstop radius
+  real<lower=0> N_p;                 // avg photons per pixel
+  array[M1, M2] int<lower=0> Y;      // observed number of photons
+  real<lower=0> sigma;               // prior scale
+}
+```
+
+Stan programs begin execution by reading in the data variables and validating their constraints (e.g., `N` being positive).
+
+
+## Transformed data
+
+Stan programs allow transforms of data to be defined and saved.
+
+```stan
+transformed data {
+  matrix[M1, M2] beamstop = beamstop_gen(M1, M2, r);  // beam stop
+  matrix[d, N] Z = rep_matrix(0, d, N);               // separator
+  matrix[N, N + d] Z_R = append_col(Z, R);            // separator + ref
+}
+```
+
+This involves three functions, only two of which are built-in, `rep_matrix` to create the `d` by `N` matrix of zero values, and `append_col` to append the zero padding (`Z`) and reference image (`R`, read in as data), together side by side. The function `beamstop_gen` is user defined and given in its own block at the start of the program along with other functions that are necessary.
+
+```stan
+functions {
+  matrix beamstop_gen(int M1, int M2, int r) {
+    matrix[M1, M2] beamstop = rep_matrix(0, M1, M2);
+    if (r == 0) {
+      return beamstop;
+    }
+    beamstop[1 : r, 1 : r] = rep_matrix(1, r, r);                // upper left
+    beamstop[1 : r, M2 - r + 2 : M2] = rep_matrix(1, r, r - 1);  // upper right
+    beamstop[M1 - r + 2 : M1, 1 : r] = rep_matrix(1, r - 1, r);  // lower left
+    beamstop[M1 - r + 2 : M1, M2 - r + 2 : M2]                   // lower right
+      = rep_matrix(1, r - 1, r - 1);
+    return beamstop;
+  }
+  ...
+```
+This function creates the shifted beamstop matrix by initializing a matrix of zeros of the size of the padding (`M1` by `M2`, given as arguments), then filling in the corners with 1 values based on the radius of the beamstop (`r`).  There are other functions where the ellipses (`...`) are shown here, and this block of functions appears first in the full Stan program before the data block.  The full Stan program in the index contains full function documentation for this and other user-defined functions appearing in the Stan program.
+
+
+## Parameter declaration
+
+The parameters are declared but not defined.  During execution, parameter values are managed by the optimization or sampling algorithm and will thus be supplied to a Stan program externally.
+
+```stan
+parameters {
+  matrix<lower=0, upper=1>[N, N] X;    // image
+}
+```
+
+It is important that the bounds here, `lower=0` and `upper=1` are included on the parameter declaration.  These define the constrained domain for `X`.  Stan operates with unconstrained parameters, so the variable `X` will be implicitly log-odds transformed from $(0, 1)$ to $(-\infty, \infty)$ (Stan's intervals are open when going from unconstrained to constrained representations, but can wind up on th boundary due to arithmetic underflow or rounding).  Stan implicitly applies the change-of-variables correction for the inverse of the log-odds transform so that a prior may be placed directly on `X` and propagate correctly to the unconstrained parameers `logit(X)`.
+
+## The model block
+
+The model block defines the log density, adding terms to those already added through the Jacobian determinant of the unconstraining transform.
+
+```stan
+model {
+  X ~ icar(sigma);
+  matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
+  matrix[M1, M2] V = square(abs(pad_fft2(X_Z_R, M1, M2)));
+  matrix[M1, M2] lambda = N_p / mean(V) * V; 
+  for (m1 in 1 : M1) {
+    for (m2 in 1 : M2) {
+      if (!beamstop[m1, m2]) {
+        Y[m1, m2] ~ poisson(lambda[m1, m2]);
+      }
+    }
+  }
+}
+```
+
+The first line, `X ~ icar(sigma)` says that `X` has an ICAR prior.  The `icar` distribution is not built into Stan, so it must be defined by the user.  Here's the definition.
+
+```stan
+  real icar_lpdf(matrix X, real sigma) {
+    int M = rows(X);
+    int N = cols(X);
+    return normal_lpdf(to_vector(X[2:M, ]) | to_vector(X[1:M - 1, ]), sigma)
+      + normal_lpdf(to_vector(X[ , 2:N]) | to_vector(X[ , 1:N - 1]), sigma);
+  }
+```
+
+Following the math, it's just a quadratic penalty on differences between row- and column-adjacent elements.  Stan allows vector slicing in the same way as MATLAB [@MATLAB2024] and R.  The variable `sigma` controls the amount of regularization applied to adjacent elements; it is supplied as a data variable from the outside, though it could be fit in a hierarchical model.
+
+The second line of the model block defines the matrix `X_Z_R` to be the result of concatenating the image (parameter `X`) to the zero separator and reference image (`Z_R`).  The third line defines the matrix `V` to be the result of performing a two-dimensional FFT on the image, separator and reference padded out to `M1` rows by zero-padding on the bottom and `M2` columns by zero-padding on the right.  this is defined in the following user-defined function.
+
+```stan
+  complex_matrix pad_fft2(complex_matrix Z, int N, int M) {
+    int r = rows(Z);
+    int c = cols(Z);
+    complex_matrix[N, M] pad = rep_matrix(0, N, M);
+    pad[1 : r, 1 : c] = Z;
+    return fft2(pad);
+  }
+```
+
+This just pads the matrix with zeros, then applies the built-in two-dimensional FFT function to the padded image, separator, and reference (`Z`).  The result is a matrix of complex values.  The model expression then takes the absolue value of the complex matrix elemenetwise (which produces a real-valued matrix of the smae dimension), the result of which is squared elementwise to produce the matrix `V`, the entries of which are proportional to the photon flux expected at that position.  The next line of the model defines `lambda` by normalizing `V` to the expected per-sensor photon count `N_p`.
+
+The final lines of the model loop over the entries of the padded matrix which are not beamstopped and sample photons (`Y`) with a Poisson distribution based on the rate (`lambda`).  This defines the likelihood and completes the model specification, which has followed the mathematical definition of the forward model directly.
+
+## Alternative unconstrained model
+
+The unconstrained model is almost identical to the constrained-parameter model.  It defines an unconstrained representation of parameters, then transforms them in the transformed parameter block as follows:
+
+```stan
+parameters {
+  matrix[N, N] logit_X;  // log-odds transformed image
+}
+transformed parameters {
+  matrix<lower=0, upper=1>[N, N] X = inv_logit(logit_X);  // image
+}
+```
+
+The parameter for the model is now `logit_X`, which is the log-odds transformed pixel value.  The constrained matrix `X` is then defined in the transformed parameters block.  Here, the constraints in the transformed parameter block, like those in the data block, are just used for error checking---they are validated at the end of the block's execution and the iteration is rejected with an error message if the constraint fails.
+
+The only other difference is that the ICAR prior is placed directly on the log odds parameters in the model block,
+
+```stan
+  logit_X ~ icar(sigma);
+```
+
+This changes the interpretation of `sigma` from being on the pixel-value scale $(0, 1)$ to the unconstrained scale $(-\infty, \infty)$.  The values of `logit_X` in practice will range between -10 and 10, the extremes of which correspond to nearly pure black and white, respectively.
+
+
+
+# Estimation and Posterior Inference
+
+Given a Stan program for a model and the corresponding data, fitting the model is straightforward using cmdstanpy [@standev2024csp].
+
+## Creating the model
+
+The first thing to do is to compile the Stan model.  This is done by transpiling from Stan to C++, then compiling the C+ and linking against the rest of Stan's math library and algorithms.  This is all handled by the following CmdStanPy call.
+
+```{python}
+model = csp.CmdStanModel(stan_file = 'stan/holoCDI.stan')
+```
+
+## Constructing the data dictionary
+
+CmdStanPy takes in data in the form of a Python dictionary.  The dictionary needs to define all the variables used in the Stan program and they have to be the right shapes to match the Stan declarations.  All of the constants have been defined and the data `Y` has been simulated.  Here, the value for `sigma` is defined to be 1; other prior scales are evaluated below.
+
+```{python}
+sigma = 1
+data = {
+    "N": N,
+    "R": R,
+    "d": N,
+    "M1": M1,
+    "M2": M2,
+    "r": r,
+    "N_p": N_p,
+    "Y": Y,
+    "sigma": sigma
+}
+```
+
+## Penalized maximum likelihood estimation
+
+Interpreting the ICAR prior as a quadratic penalty, a penalized maximum likelihood estimate (MLE) $x^*$ is defined by
+\begin{equation}
+x^* = \textrm{arg max}_x \log p(y; \, x) + \log \textrm{icar}(x),
+\end{equation}
+but with no Jacobian adjustment for any change-of-variables used to constrain $x$ because $x$ is no longer considered to be a random variable (hence the semicolon in the notation).
+
+This estimate can be computed through optimization in Stan.
+
+```{python}
+fit_mle = model.optimize(data = data, inits=0.5, jacobian=False, seed = 5678)
+```
+
+A random seed is hardcoded for reproducibility and initialiation is specified to be $\textrm{uniform}(-0.5, 0.5)$ on the unconstrained scale. The Jacobian adjustment for the constrained parameter is turned off here for computing the MLE.
+
+
+## Maximum a posteriori estimation
+
+An alternative point estimation strategy can be derived by taking the point in the posterior with maximum posterior log density.
+
+\begin{equation}
+x^{**} = \textrm{arg max}_x \log p(x \mid y).
+\end{equation}
+
+Here, the Jacobian adjustment is included as part of the definition of $p(x \mid y)$.
+
+The maximum a posteriori (MAP) estimate can be calculated with optimization in Stan by turning on the Jacobian adjustment for constrained parameters.
+
+```{python}
+fit_map = model.optimize(data = data, inits=0.5, jacobian=True, seed = 5678)
+```
+
 # References {.unnumbered}
 
 ::: {#refs}
@@ -490,8 +708,16 @@ This completes the definition of the likelihood and with the prior, the forward 
 
 # Appendicies {.unnumbered}
 
-## A. Stan Program {#full-code .appendix .unnumbered}
+# A. Stan Programs {.appendix .unnumbered}
+
+## A.1 Constrained parameter version {.appendix .unnumbered}
 
 ```stan
 {{< include stan/holoCDI.stan >}}
+```
+
+## A.2 Unconstrained parameter version {.appendix .unnumbered}
+
+```stan
+{{< include stan/holoCDI-unc.stan >}}
 ```
