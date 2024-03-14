@@ -344,14 +344,14 @@ print(f"ifftshift(fftshift(A)) =\n{A_shift_ishift}")
 
 ### Fourier transform
 
-The concatenated and padded image $P$ is next put through a discrete, two-dimensional fast Fourier transform (FFT), the values of which are reduced to their absolute values (i.e., magnitudes), and squared, resulting in a matrix of values that is proportional to the expected intensity of sensor readings given the image, separator, reference, and padding,
+The concatenated and padded image $P$ is next put through a discrete, two-dimensional fast Fourier transform (FFT), which produces a complex matix of values.  These complex values, which have real and imaginary components, are then reduced to their real absolute value (aka magnitude).  The complex absolute value is the hypoteneuse of their real and imaginary components, but the angle, or phase, is lost.  This is why the problem of inferring the image from its Fourier transform is known as a phase-retrieval problem.  The absolute value is then squared, resulting in a matrix of values that is proportional to the expected intensity of sensor readings given the image, separator, reference, and padding,
 \begin{equation}
-V = \left| \, \textrm{fft2}(P) \, \right|^2.
+V = \big| \, \textrm{fft2}(P) \, \big|^2.
 \end{equation}
-$P$ is of size $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-dimensional FFTs of size 512 and 512 one-dimensional FFTs of size 1536.  @fig-fftout shows a visualization of $V$ after the FFT shift to center the low frequencies.
+$P$ has shape $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-dimensional FFTs of size 512 and 512 one-dimensional FFTs of size 1536.  @fig-fftout shows a visualization of $V$, after the FFT shift to center the low frequencies.  The expected photon flux defines a lovely tartan pattern with horizontal and vertical reflection symmetries and a starburst in the center, which indicates the high expected photon flux in the low frequencies (which have been shifted to the center).
 
 ```{python}
-#| fig-cap: Squared magnitudes of the FFT of the concatenated and padded image.  The plot is scaled to $\log (1 + V)$ in order to display the pattern.
+#| fig-cap: Squared magnitudes of the FFT of the concatenated and padded image.  The low frequencies have been shifted to the center and the reflective symmetries show how the two-dimensional FFT has horizontal and vertical reflection symmetry. The bright spot in the middle shows the high expected photon flux in the low frequencies.  The plot is scaled to $\log (1 + V)$ in order to display the pattern.
 #| label: fig-fftout
 #| fig-align: center
 #| fig-pos: 't'
@@ -368,19 +368,18 @@ plt.tight_layout()
 plt.show()
 ```
 
-Note that this has been shifted.  The result is a lovely tartan pattern with a highly concentrated beam in the low frequencies.
 
 
 ### Beamstop
 
-To avoid the coherent X-ray beam from destroying the sensors with concentrated low-frequencies, the low frequency diffractions are blocked with a beamstop.  This blockage means zero photons arrive at sensors in the stopped positions.  The image must be reconstructed from only the remaining sensors.
+To prevent the coherent X-ray beam from destroying the sensors with high photon flux in the low frequencies, the frequency sensors are blocked with a beamstop.  This blockage means zero photons arrive at sensors in the stopped positions.  The image must be reconstructed from only the remaining sensors.
 
 The beamstop has a configurable radius $r$ and occludes an $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square of censors.  These are placed at the low frequencies, which will be the center of the image when it is centered around zero. After the FFT shift is applied, the stopped regions move to the four corners (see the example in the previous section).
 
 The shifted beamstop can be directly encoded as a matrix with zero values everywhere other than the 1 values in the the top left corner ($r \times r$ block), top right ($r \times r - 1$ block), lower left ($r-1 \times r$ block) and lower right ($r - 1 \times r - 1$ block).  We will let $\textrm{beamstop}_{i, j}$ be equal to 1 if position $(i, j)$ is stopped (i.e., blocked) and 0 otherwise.  When pieced together, that's a $(2 \cdot r - 1) \times (2 \cdot r - 1)$ square that's stopped.  A plot of the beamstop is shown in @fig-beamstop.
 
 ```{python}
-#| fig-cap: Illustration of beamstop after fftshift.  The solid blue rectangles occlude the low frequencies, so that photon flux is not measured at those positions.
+#| fig-cap: Illustration of beamstop before the shifting.  The solid blue rectangles occlude the low frequencies in the corners, so that photon flux is not measured at those positions.
 #| label: fig-beamstop
 #| fig-align: center
 #| fig-pos: 't'
@@ -436,14 +435,14 @@ plot
 
 ### Normalization
 
-Let $N_p$ be the number of photons expected per sensor.  This is used like an exposure value in a Poisson model to set the scale of the expected photon counts to be 
+Let $N_p$ be the number of photons expected per sensor.  This is used like an exposure value in a Poisson model to set the scale of the expected photon counts, which are given by the vector $\lambda \in (0, \infty)^{M_1 \times M_2},$ defined by
 \begin{equation}
 \lambda = \frac{N_p}{\textrm{mean}(V)} \cdot V.
 \end{equation}
 
 ### Poisson photon sampling
 
-Finally, the number of photons observed at each sensor in the grid is generated as a Poisson process, based on the rate $\lambda.$
+Finally, the number of photons observed at each sensor in the grid is generated as a Poisson distribution, based on the expected photon flux  $\lambda,$
 \begin{equation}
 Y_{i, j} \sim
 \begin{cases}
@@ -453,17 +452,25 @@ Y_{i, j} \sim
 \end{cases}
 \end{equation}
 
-Given $\lambda,$ a Poisson random number generator can be used to simulate data.  An example is shown in @fig-simy.  
+A visualization of simulated $Y$ is shown (after being shifted) in @fig-simy.  The beamstop radius is set to $r = 13,$ so there is a $25 \times 25$ pixel square of sensors occluded by the beamstop.
 
 ```{python}
-#| fig-cap: Sampled value of $Y$, which is distributed Poisson with rate $\lambda$.  The scaled values $\log(1 + Y)$ is shown.
+#| fig-cap: Sampled value of $Y$, which is distributed Poisson with rate $\lambda$.  The effect of the beamstop can be seen in the $25 \times 25$ pixel black square in the center, indicating a flux of zero. The scaled matrix $\log(1 + Y)$ is shown.
 #| label: fig-simy
 #| fig-align: center
 #| fig-pos: 't'
 
+r = 13
+shifted_beamstop = np.ones((M1, M2))  # 0 values are occluded
+shifted_beamstop[M1 // 2 - r + 1: M1 // 2 + r,
+                 M2 // 2 - r + 1: M2 // 2 + r] = 0
+beamstop = np.fft.ifftshift(shifted_beamstop)
+
 N_p = 1  # expected number of photons per sensor
-lamda = N_p / V.mean() * V
-Y = sp.stats.poisson.rvs(lamda, random_state=1234)
+lambbda = N_p / V.mean() * V
+preY = sp.stats.poisson.rvs(lambbda, random_state=1234)
+Y = preY * beamstop
+
 log1pY = np.log1p(Y)
 plt.figure(figsize=(9,3))
 plt.imshow(np.log1p(np.fft.fftshift(Y)), cmap="viridis")
@@ -473,8 +480,7 @@ plt.tight_layout()
 plt.show()
 ```
 
-This completes the definition of the sampling distribution;  the likelihood is just the sampling distribution viewed as a function of the parameters for fixed data. 
-
+This completes the definition of the likelihood and with the prior, the forward model for simulating data.
 
 # References {.unnumbered}
 
