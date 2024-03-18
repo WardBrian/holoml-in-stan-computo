@@ -49,8 +49,7 @@ published: false # will be set to true once accepted
 monobackgroundcolor: white
 format:
   computo-html: default
-  computo-pdf:
-    top-level-division: section
+#  computo-pdf: default
 jupyter: python3
 ---
 
@@ -640,12 +639,13 @@ This changes the interpretation of `sigma` from being on the pixel-value scale $
 
 Given a Stan program for a model and the corresponding data, fitting the model is straightforward using cmdstanpy [@standev2024csp].
 
-## Creating the model
+## Compiling the models
 
-The first thing to do is to compile the Stan model.  This is done by transpiling from Stan to C++, then compiling the C+ and linking against the rest of Stan's math library and algorithms.  This is all handled by the following CmdStanPy call.
+The first thing to do is to compile the Stan model.  This is done by transpiling from Stan to C++, then compiling the C+ and linking against the rest of Stan's math library and algorithms.  This is all handled by the following CmdStanPy calls, one for the constrained and one for the unconstrained model.
 
 ```{python}
-model = csp.CmdStanModel(stan_file = 'stan/holoCDI.stan')
+model = csp.CmdStanModel(stan_file='stan/holoCDI.stan')
+model_unc = csp.CmdStanModel(stan_file='stan/holoCDI-unc.stan')
 ```
 
 ## Constructing the data dictionary
@@ -655,19 +655,16 @@ CmdStanPy takes in data in the form of a Python dictionary.  The dictionary need
 ```{python}
 sigma = 1
 data = {
-    "N": N,
-    "R": R,
-    "d": N,
-    "M1": M1,
-    "M2": M2,
-    "r": r,
-    "N_p": N_p,
-    "Y": Y,
-    "sigma": sigma
+    "N": N, "R": R, "d": N, "M1": M1, "M2": M2, "r": r, "N_p": N_p,
+    "Y": Y, "sigma": sigma
 }
 ```
 
-## Penalized maximum likelihood estimation
+## Optimization-based point estimates
+
+In this section, Stan's optimizer is used to find point estimates as modes of a target density.  Stan uses L-BFGS [@zhu1997], a limited-memory form of quasi-Newton optimization, which is a widely used black-box optimizer that uses finite-differences of the past few gradients to approximate a low-rank plus diagonal preconditioner dynamically doing optimization.  This reduces linear algebra from the $\mathcal{O}(N^3)$ required for Newton's method to $\mathcal{O}(J^2 \cdot N),$ where $J$ is the rank of the preconditioner before adding the diagonal to make it positive definite.
+
+### Penalized maximum likelihood estimation
 
 Interpreting the ICAR prior as a quadratic penalty, a penalized maximum likelihood estimate (MLE) $x^*$ is defined by
 \begin{equation}
@@ -675,30 +672,156 @@ x^* = \textrm{arg max}_x \log p(y; \, x) + \log \textrm{icar}(x),
 \end{equation}
 but with no Jacobian adjustment for any change-of-variables used to constrain $x$ because $x$ is no longer considered to be a random variable (hence the semicolon in the notation).
 
-This estimate can be computed through optimization in Stan.
+This estimate can be computed through optimization in Stan and extracted into a Python variable.
 
 ```{python}
 fit_mle = model.optimize(data = data, inits=0.5, jacobian=False, seed = 5678)
+X_hat_mle = fit_mle.stan_variable('X')
 ```
 
 A random seed is hardcoded for reproducibility and initialiation is specified to be $\textrm{uniform}(-0.5, 0.5)$ on the unconstrained scale. The Jacobian adjustment for the constrained parameter is turned off here for computing the MLE.
 
 
-## Maximum a posteriori estimation
+### Maximum a posteriori estimation
 
-An alternative point estimation strategy can be derived by taking the point in the posterior with maximum posterior log density.
+An alternative point estimation strategy can be derived by taking the point in the posterior with maximum posterior log density.  Here, the Jacobian adjustment for the constraining transform to x is included as part of the definition of $p(x \mid y)$.  
 
 \begin{equation}
 x^{**} = \textrm{arg max}_x \log p(x \mid y).
 \end{equation}
 
-Here, the Jacobian adjustment is included as part of the definition of $p(x \mid y)$.
-
 The maximum a posteriori (MAP) estimate can be calculated with optimization in Stan by turning on the Jacobian adjustment for constrained parameters.
 
 ```{python}
 fit_map = model.optimize(data = data, inits=0.5, jacobian=True, seed = 5678)
+X_hat_map = fit_map.stan_variable('X')
 ```
+
+### MLE and MAP for unconstrained model
+
+The third estimation strategy involves the direct unconstrained parameterization with an ICAR prior on the unconstrained parameters.  Because there are no constraining transforms, the penalized MLE and MAP estimates coincide.  These can be computed in Stan as follows.
+
+```{python}
+sigma_unc = 10
+data_unc = {
+    "N": N, "R": R, "d": N, "M1": M1, "M2": M2, "r": r, "N_p": N_p,
+    "Y": Y, "sigma": sigma_unc
+}
+fit_mle_unc = model_unc.optimize(data = data_unc, inits=0.5, jacobian=False, seed = 5678)
+X_hat_mle_unc = fit_mle_unc.stan_variable('X')
+```
+
+### Visualizing the optimization-based fits
+
+@fig-pointfits shows the fits for the MLE, MAP, and unconstrained MLE/MAP estimates as well as the original image from which data is simulated.
+
+```{python}
+#| fig-cap: Original image and optimization-based reconstructions. (a) original source image, (b) penalized maximum likelihood estimate, (c) maximum a posteriori estimate, (d) penalized maximum likelihood (equivalently maximum a posteriori) estimate for unconstrained model.
+#| label: fig-pointfits
+#| fig-align: center
+#| fig-pos: 't'
+
+def add_plot(fig, m, n, k, title, x):
+    ax = fig.add_subplot(m, n, k, title=title)
+    ax.imshow(x, cmap="gray", vmin=0, vmax=1)
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+fig = plt.figure()
+add_plot(fig, 1, 4, 1, "(a) source", X_src)
+add_plot(fig, 1, 4, 2, "(b) MLE", X_hat_mle)
+add_plot(fig, 1, 4, 3, "(c) MAP", X_hat_map)
+add_plot(fig, 1, 4, 4, "(d) MLE/MAP [unc]", X_hat_mle_unc)
+```
+
+## Effect of prior scale
+
+There is a free tuning parameter $\sigma,$ which is the prior scale.  This is input as data to the Stan program and used in the ICAR prior to smooth (i.e., regularize) the values of adjacent pixels toward each other.  The earlier example used $\sigma = 1,$ which does very little smoothing given that the range of values is 0 to 1.  A range of values for $\sigma$ can be evaluated in a loop.
+
+```{python}
+sigmas = [1/256, 1/64, 1/16, 1/4, 1, 4, 16]
+J = len(sigmas)
+X_fits = np.ones(shape=(J, 256, 256))
+data_varying_sigma = data.copy()
+for j, sigma in enumerate(sigmas):
+    data_varying_sigma['sigma'] = sigma
+    fit = model.optimize(data = data_varying_sigma, inits=0.5, jacobian=True, seed = 5678)
+    X_fits[j, :, :] = fit.stan_variable('X').copy()
+```
+
+The resultig estimates are displayed in @fig-sigmas.
+
+```{python}
+#| fig-cap: Effect of different sigma values on smoothing.
+#| label: fig-sigmas
+#| fig-align: center
+#| fig-pos: top
+
+fig = plt.figure()
+add_plot(fig, 2, (J + 1) // 2, 1, "source", X_src)
+for j, sigma in enumerate(sigmas):
+    add_plot(fig, 2, (J + 1) // 2, j + 2, f"sigma: {sigma:5.3f}", X_fits[j])
+```
+
+## Bayesian estimates and samples
+
+We consider two Bayesian methods, both of which produce draws and allow for plug-in Monte Carlo estimation of posterior predictive quantitites.  The first is variational inference, which provide approximate posterior draws, and the second is Markov-chain Monte Carlo, which is much more expensive, but produces unbiased posterior draws.
+
+### Variational inference
+
+Variational inference fits an approximate distribution $q(x \mid \phi)$ to the target posterior density $p(x \mid y)$ by choosing the approximating parameters $\phi$ that render it closest in terms of Kullback-Leibler divergence,
+\begin{equation}
+\phi^* = \textrm{arg max}_\phi \ \textrm{KL}[q(x \mid \phi) || p(x \mid y)].
+\end{equation}
+In this case study, the Pathfinder approach is used [@zhang2022].  Pathfinder runs quasi-Newton optimization on the target density $p(x \mid y)$ from random initializations and then uses points along the optimization trajectory as the location of second-order Taylor approximations to the target density with the low-rank plus diagonal covariance estimated by the L-BFGS optimizer.  The result is a series of multivariate normal approximations.  Each of these is evaluated for KL-divergence using Monte Carlo methods (which are stable for the KL divergence in a way they are not stable for the gradients).  This is done several times and then the normal approximations are sampled using importance resampling.  This gives us unconstrained draws, which are then constrained to give the final set of draws for the method.
+
+Pathfinder is straightforward to run.
+
+
+```{python}
+# fit_pf = model.pathfinder(data, inits=1, max_lbfgs_iters=10,
+#     psis_resample=True, num_elbo_draws=10,
+#     num_paths=2, draws=100, num_single_draws=100, 
+#     show_console=False, seed=5678)
+# draws_pf_X = fit_pf.stan_variables()['X']
+# X_hat_pf = np.mean(draws_pf_X, axis=0)
+# X_draw_pf = draws_pf_X[10, :]  # 10 is just arbitrary draw
+```
+
+
+### Markov-chain Monte Carlo
+
+Markov-chain Monte Carlo methods run a Markov chain, which in the limit has the target density as its stationary distribution.  This allows draws from the chain to be used for plug-in Monte Carlo estimates.
+
+Sampling is run in the same way as Pathinder, with draws being extracted and averaged to create the estimate.
+
+```{python}
+# inits_from_pf = fit_pf.create_inits(2)
+# fit_sample = model.sample(data, inits=inits_from_pf, chains=2, parallel_chains=2,
+#                           iter_warmup=20, iter_sampling=20,
+#                           show_console=False, show_progress=False,
+#                           seed = 5678, max_treedepth=5)
+# draws_mcmc_X = fit_sample.stan_variable('X')
+# X_hat_mcmc = np.mean(draws_mcmc_X, axis=0)
+# X_draw_mcmc = draws_mcmc_X[10, :]  # 10 is an arbitrary draw
+```
+
+### Plotting MCMC-derived fits
+
+```{python}
+#| fig-cap: Original image and Bayesian sampling-based reconstructions. (a) original source image, (b) draw from Pathfinder, (c) mean from pathfinder, (d) draw from Markov chain Monte Carlo, (e) mean from Markov chain Monte Carlo.
+#| label: fig-bayesfits
+#| fig-align: center
+#| fig-pos: 't'
+
+# figbayes = plt.figure()
+# add_plot(figbayes, 1, 5, 1, "(a) source", X_src)
+# add_plot(figbayes, 1, 5, 2, "(b) VI [draw]", X_draw_pf)
+# add_plot(figbayes, 1, 5, 3, "(c) VI [mean]", X_hat_pf)
+# add_plot(figbayes, 1, 5, 4, "(d) MCMC [draw]", X_draw_mcmc)
+# add_plot(figbayes, 1, 5, 5, "(e) MCMC [mean]", X_hat_mcmc)
+```
+
 
 # References {.unnumbered}
 
