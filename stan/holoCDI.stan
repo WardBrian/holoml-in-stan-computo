@@ -6,7 +6,7 @@ functions {
    * corners set to 1.  The block sizes are upper left (r x r), upper
    * right (r x r-1), lower left (r-1 x r), and lower right (r-1 x
    * r-1).
-   * 
+   *
    * @param M1 number of rows
    * @param M2 number of cols
    * @param r block dimension
@@ -46,7 +46,7 @@ functions {
 
   /**
    * Return the intrinsic conditional autoregressive prior density
-   * for the specified image matrix X.  this is 
+   * for the specified image matrix X.  this is
    *
    * @param X image matrix with values in (0, 1)
    * @param sigma scale of ICAR prior
@@ -55,8 +55,8 @@ functions {
   real icar_lpdf(matrix X, real sigma) {
     int M = rows(X);
     int N = cols(X);
-    return normal_lpdf(to_vector(X[2:M, ]) | to_vector(X[1:M - 1, ]), sigma)
-      + normal_lpdf(to_vector(X[ , 2:N]) | to_vector(X[ , 1:N - 1]), sigma);
+    return normal_lupdf(to_vector(X[2:M, ]) | to_vector(X[1:M - 1, ]), sigma)
+      + normal_lupdf(to_vector(X[ , 2:N]) | to_vector(X[ , 1:N - 1]), sigma);
   }
 }
 data {
@@ -82,10 +82,10 @@ model {
   X ~ icar(sigma);
   matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
   matrix[M1, M2] V = square(abs(pad_fft2(X_Z_R, M1, M2)));
-  matrix[M1, M2] lambda = N_p / mean(V) * V; 
+  matrix[M1, M2] lambda = N_p / mean(V) * V;
   for (m1 in 1 : M1) {
     for (m2 in 1 : M2) {
-      if (!beamstop[m1, m2]) {
+      if (beamstop[m1, m2] != 1) {
         Y[m1, m2] ~ poisson(lambda[m1, m2]);
       }
     }

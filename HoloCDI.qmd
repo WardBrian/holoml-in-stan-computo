@@ -60,7 +60,7 @@ Coherent diffraction imaging (CDI) is a technique for imaging nanoscale biomolec
 
 Holographic coherent diffraction imaging (HCDI) is a variant of CDI in which the specimen is placed some distance away from a known reference object, and the data observed is the pattern of  diffraction around both the specimen and the reference. The addition of a reference object reduces the inverse problem to a linear deconvolution problem which has a unique, closed-form solution in the idealized setting [@barmherzig2019].
 
-In this note, we follow @barmherzig2022 in defining a forward statistical model that, given the image being reconstructed, defines the expected photon flux at the sensors in terms of the Fourier transform of the image and Poisson sampling of incident photons.  Starting from the model of @barmherzig2022, we add an intrinsic conditional autoregressive (ICAR) prior on the image which can be used to control smoothing of adjacent pixels [@besag1991].  We then log-odds (logit) transform the parameters of the model, which represent pixel intensity between 0 and 1, into unconstrained variables so the model has support on all of $\mathbb{R}^{M \times N}$ for an $M \times N$ pixel image. 
+In this note, we follow @barmherzig2022 in defining a forward statistical model that, given the image being reconstructed, defines the expected photon flux at the sensors in terms of the Fourier transform of the image and Poisson sampling of incident photons.  Starting from the model of @barmherzig2022, we add an intrinsic conditional autoregressive (ICAR) prior on the image which can be used to control smoothing of adjacent pixels [@besag1991].  We then log-odds (logit) transform the parameters of the model, which represent pixel intensity between 0 and 1, into unconstrained variables so the model has support on all of $\mathbb{R}^{M \times N}$ for an $M \times N$ pixel image.
 
 The forward model of holographic CDI defines a sampling distribution for the observed photon flux.  When combined with a prior, the forward model induces an inverse problem whereby we measure photon flux on a grid of sensors and infer the image that caused it.  We will explore the following standard algorithms for exact and approximate solution of the inverse problem.
 
@@ -69,7 +69,7 @@ The forward model of holographic CDI defines a sampling distribution for the obs
 * Variational Bayes (VB): Solve by minimizing Kullback-Leibler divergence from an approximate posterior to the true posterior and importance resampling.
 * Markov chain Monte Carlo (MCMC): Solve by sampling from the posterior and averaging.
 
-Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for summarizing fits to data.  
+Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for summarizing fits to data.
 
 @barmherzig2022 used two different optimizers for maximum likelihood inference, conjugate gradient and trust regions. We will employ limited memory quasi-Newton optimization in the form of the limited-memory BFGS (L-BFGS) optimizer [@zhu1997], which tends to outperform both conjugate gradient and trust-region methods for relatively simple optimization problems in moderately high dimensions like this one.  If the model adjusts for the inverse log odds (logistic) transform, the optimizer produces a maximum a posteriori (MAP) estimate, whereas if the model does not adjust for the change of variables, the optimizer produces a penalized maximum likelihood estimate (MLE).
 
@@ -81,7 +81,6 @@ Generating the data requires the standard Python numerical libraries `scipy.stat
 
 ```{python}
 import cmdstanpy as csp
-import bridgestan as bs
 import numpy as np
 import scipy as sp
 import os
@@ -94,7 +93,7 @@ import logging
 import warnings
 
 # turn off warning and info messages from Stan
-csp.utils.get_logger().setLevel(logging.ERROR) 
+csp.utils.get_logger().setLevel(logging.ERROR)
 
 # turn off warnings from plotnine
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -227,7 +226,7 @@ p_U(u) \propto { } &
 \prod_{(m, n) \sim (m', n')}
 \textrm{normal}\!\left(\textrm{logit}^{-1}(u_{m,n}) \mid \textrm{logit}^{-1}(u_{m',n'}), \ \sigma\right)
 \\
-& 
+&
 \hspace*{1em} \cdot \prod_{m, n} \textrm{logit}^{-1}(u_{m, n}) \cdot (1 - \textrm{logit}^{-1}(u_{m,n})).
 \end{align}
 
@@ -264,7 +263,7 @@ plt.show()
 
 ### The seperator and reference image
 
-There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen, so that its width $d$ is equal to $N,$ the pixel width of the image.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.  
+There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen, so that its width $d$ is equal to $N,$ the pixel width of the image.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.
 
 After the image, separator, and padding are concatenated left-to-right (i.e., by column), the result $\textrm{concat}(X, Z, R)$ is padded with zero values on the right and on the bottom to a final size of $M_1 \cdot M_2.$  Let $\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)$ be the result.
 
@@ -294,7 +293,7 @@ The original image, separator and reference image are next padded to the right a
 \begin{equation}
 P = \textrm{pad}(\textrm{cat}(X^{\textrm{src}}, Z, R), M_1, M_2)
 \end{equation}
-be the padded version of the image, separator, and reference image, where $X^{\textrm{src}}$ is the source image, $Z$ is a zero matrix, and $R$ is the reference image.  The padding is taken to be twice the size of the material imaged, so that $M_1 = 6 \cdot 256$ and $M_2 = 2 \cdot 256,$ which brings the total number of sensors to 786,432, just shy of one megapixel. 
+be the padded version of the image, separator, and reference image, where $X^{\textrm{src}}$ is the source image, $Z$ is a zero matrix, and $R$ is the reference image.  The padding is taken to be twice the size of the material imaged, so that $M_1 = 6 \cdot 256$ and $M_2 = 2 \cdot 256,$ which brings the total number of sensors to 786,432, just shy of one megapixel.
 
 
 
@@ -304,7 +303,7 @@ Most fast Fourier transform (FFT) interfaces, including those in Stan, Matlab, a
 \begin{equation}
 0, 1, \ldots, N, -N, -N + 1, \ldots, -1.
 \end{equation}
-To get centered values, these are circularly shifted until the lowest frequency, represented at position 0, is in the middle, 
+To get centered values, these are circularly shifted until the lowest frequency, represented at position 0, is in the middle,
 \begin{equation}
 -N, -N + 1, \ldots -1, 0, 1, \ldots, N-1, N.
 \end{equation}
@@ -497,7 +496,7 @@ where $x$ is the vector of parameters representing the image and $y$ is the obse
 
 ## The data declaration
 
-This is the block declaring all of the data variables that must be supplied externally.  The Stan variable names mirror those used in the mathematical definitions.  
+This is the block declaring all of the data variables that must be supplied externally.  The Stan variable names mirror those used in the mathematical definitions.
 
 ```stan
 data {
@@ -570,7 +569,7 @@ model {
   X ~ icar(sigma);
   matrix[N, 2 * N + d] X_Z_R = append_col(X, Z_R);
   matrix[M1, M2] V = square(abs(pad_fft2(X_Z_R, M1, M2)));
-  matrix[M1, M2] lambda = N_p / mean(V) * V; 
+  matrix[M1, M2] lambda = N_p / mean(V) * V;
   for (m1 in 1 : M1) {
     for (m2 in 1 : M2) {
       if (!beamstop[m1, m2]) {
@@ -684,7 +683,7 @@ A random seed is hardcoded for reproducibility and initialiation is specified to
 
 ### Maximum a posteriori estimation
 
-An alternative point estimation strategy can be derived by taking the point in the posterior with maximum posterior log density.  Here, the Jacobian adjustment for the constraining transform to x is included as part of the definition of $p(x \mid y)$.  
+An alternative point estimation strategy can be derived by taking the point in the posterior with maximum posterior log density.  Here, the Jacobian adjustment for the constraining transform to x is included as part of the definition of $p(x \mid y)$.
 
 \begin{equation}
 x^{**} = \textrm{arg max}_x \log p(x \mid y).
@@ -781,7 +780,7 @@ Pathfinder is straightforward to run.
 ```{python}
 # fit_pf = model.pathfinder(data, inits=1, max_lbfgs_iters=10,
 #     psis_resample=True, num_elbo_draws=10,
-#     num_paths=2, draws=100, num_single_draws=100, 
+#     num_paths=2, draws=100, num_single_draws=100,
 #     show_console=False, seed=5678)
 # draws_pf_X = fit_pf.stan_variables()['X']
 # X_hat_pf = np.mean(draws_pf_X, axis=0)
