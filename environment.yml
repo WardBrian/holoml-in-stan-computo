@@ -12,4 +12,4 @@ dependencies:
   - cmdstan=2.34.1
   - cmdstanpy=1.2.1
   - pip:
-    - codeapertures
+    - codedapertures
