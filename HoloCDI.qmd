@@ -72,12 +72,13 @@ The forward model of holographic CDI defines a sampling distribution for the obs
 Computationally, we will code the models using Stan [@carpenter2017], a probabilistic programming language for expressing differentiable log densities.  All that is needed to solve the inverse problem with Stan is a program implementing the forward model's log density.  Stan uses derivative-based methods for optimization, sampling, and variational inference in order to scale with dimension.  It also contains a comprehensive suite of posterior analysis tools for summarizing fits to data.
 
 @barmherzig2022 used two different optimizers for maximum likelihood inference, conjugate gradient and trust regions. We will employ limited memory quasi-Newton optimization in the form of the limited-memory BFGS (L-BFGS) optimizer [@zhu1997], which tends to outperform both conjugate gradient and trust-region methods for relatively simple optimization problems in moderately high dimensions like this one.  If the model adjusts for the inverse log odds (logistic) transform, the optimizer produces a maximum a posteriori (MAP) estimate, whereas if the model does not adjust for the change of variables, the optimizer produces a penalized maximum likelihood estimate (MLE).
+<!-- BMW: seems repetitive with above bulleted list? -->
 
 We employ two different Bayesian methods for solving the inverse problem, variational Bayes (VB) and Markov chain Monte Carlo (MCMC) sampling.  For MCMC, we employ the no-U-turn sampler (NUTS) [@hoffman2014], which is an adaptive form of Hamiltonian Monte Carlo (HMC).  With MCMC, the result is an exact posterior sampler for which estimation error goes to zero as sample size goes to infinity.  For variational Bayes, we employ Pathfinder [@zhang2022].  With VB, the results are only approximate, and in particular, posterior uncertainty tends to be systematically underestimated because we minimize KL-divergence from the approximation to the target distribution.
 
 ## Python boilerplate
 
-Generating the data requires the standard Python numerical libraries `scipy.stats` and `numpy`, as well as the plotting library `matplotlib` to display results.  Stan is accessed through the `cmdstanpy` and `bridgestan` interfaces.  There is also code for converting RGB-coded images to grayscale.
+Generating the data requires the standard Python numerical libraries `scipy.stats` and `numpy`, as well as the plotting libraries `matplotlib` and `plotnine` to display results.  Stan is accessed through the `cmdstanpy` interface.  There is also code for converting RGB-coded images to grayscale.
 
 ```{python}
 import cmdstanpy as csp
@@ -136,6 +137,8 @@ plt.show()
 
 ## Secondary test images
 
+<!-- BMW: are these still planned? -->
+
 In addition to the mimivirus image, we will also simulate and reconstruct the ten images show in @fig-test_img.
 
 ```{python}
@@ -163,11 +166,11 @@ plt.show()
 ## Image and photon sensor representations
 
 An image is represented by a random matrix of continuous pixel values between 0 and 1,
-$X \in [0, 1]^{N \times N}$.  Typically we will be using a representation that excludes the endpoints other than through numerical underflow or rounding.  The photons measured at the sensor are represented by a random matrix of discrete counts for the sensor grid, $Y \in \mathbb{N}^{M_1 \times M_2}.$
+$X \in [0, 1]^{N \times N}$.  Typically we will be using a representation that excludes the endpoints other than through numerical underflow or rounding. <!-- BMW: should we be re-quantizing our images do we think? --> The photons measured at the sensor are represented by a random matrix of discrete counts for the sensor grid, $Y \in \mathbb{N}^{M_1 \times M_2}.$
 
 ## Unconstrained representation and change of variables correction
 
-It is more convenient for both sampling and optimizatio to work over an unconstrained parameterization with support in all of $\mathbb{R}^D$ for some $D.$  As an alternative to the constrained image representation $X$, consider the smooth, bijective, and strictly monotonic log odds transform applied elementwise,
+It is more convenient for both sampling and optimization to work over an unconstrained parameterization with support in all of $\mathbb{R}^D$ for some $D.$  As an alternative to the constrained image representation $X$, consider the smooth, bijective, and strictly monotonic log odds transform applied elementwise,
 \begin{equation}
 U = \textrm{logit}(X),
 \end{equation}
@@ -200,7 +203,7 @@ The first step is to generate an image from the prior,
 \begin{equation}
 x \sim p_X\,(\cdot).
 \end{equation}
-Then, given the image $x$, the second and final step is to generate the photons observed at the sensors $y$ conditoned on the image $x,$ using the sampling distribution,
+Then, given the image $x$, the second and final step is to generate the photons observed at the sensors $y$ conditioned on the image $x,$ using the sampling distribution,
 \begin{equation}
 y \sim p_{Y \mid X}\,(\cdot \mid x).
 \end{equation}
@@ -210,7 +213,7 @@ y \sim p_{Y \mid X}\,(\cdot \mid x).
 
 ### Uniform prior is possible
 
-Because the space $[0, 1]^{256 \times 256}$ has finite hypervolume, it would be possible to use a uniform prior over pixel values, $p_X(x) \propto 1.$  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021], a promising modern approach to which is based on diffusion models [@graikos2022,@fei2023].
+Because the space $[0, 1]^{256 \times 256}$ has finite hypervolume, it would be possible to use a uniform prior over pixel values, $p_X(x) \propto 1.$  At the other extreme, it would also be possible to introduce a meaningful natural image prior [@kadkhodaie2021], a promising modern approach to which is based on diffusion models [@graikos2022; @fei2023].
 
 ### ICAR prior in constrained space
 
@@ -218,7 +221,7 @@ Instead of a uniform prior or natural image prior, we will use a simple intrinsi
 \begin{equation}
 p_X(x) \propto \prod_{(m, n) \sim (m', n')} \textrm{normal}(x_{m,n} \mid x_{m',n'}, \ \sigma),
 \end{equation}
-where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$, and where $\sigma$ is the scale of the normal distribution.  This density $p_X$ can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not do evaluate that option here.
+where $\sim$ is the adjacency relationship defined to be unique so that  $(m, n) \sim (m + 1, n)$ for $m < 256$ and $(m, n) \sim (m, n + 1)$ for $n < 256$, and where $\sigma$ is the scale of the normal distribution.  This density $p_X$ can, in theory, be normalized within the space $[0, 1]^{256 \times 256},$ but that is not going to be necessary for any of the inference methods we use.  It would also be possible to smooth along the diagonals by including an adjacency relation $(m, n) \sim (m + 1, n + 1)$ for $m, n < 256,$ but we do not evaluate that option here.
 
 Because we will be sampling using the unconstrained space $U,$ we apply the change of variables from $X$ to derive the density in the unconstrained space,
 \begin{align}
@@ -244,15 +247,16 @@ The sampling distribution proceeds in several stages.  First, the image is combi
 
 ### The reference image
 
-For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978]; see @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We have just included the reference array as a file, but it can also be generated programatically using a Python package such as [cappy](https://github.com/bpops/cappy).   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
+For the experiments here, we use an idealized optimal reference image $R$, the uniformly redundant array (URA) reference [@fenimore1978]; see @fig-ura.  The URA has been shown to be an optimal reference image for this kind of work.   We use the [codedapertures](https://github.com/bpops/codedapertures) package to generate a URA of appropriate size.   The URA is black and white (i.e., no intermediate gray values), and it has the same dimensions ($256 \times 256$) as the image being inferred. It will be supplied as data, so that other references can be swapped in depending on the actual reference image being used (e.g., a square cutout, a pinhole, or no reference at all).
 
 ```{python}
-#| fig-cap: Uniformly redundant array. This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code by swapping the reference data file.
+#| fig-cap: Uniformly redundant array. This reference image is optimal for identification through phase retrieval. Other reference images may be used with the same code and model.
 #| label: fig-ura
 #| fig-align: center
 #| fig-pos: 't'
 
-R = np.loadtxt('img/URA.csv', delimiter=",", dtype=int)
+import codedapertures
+R = codedapertures.ura(rank=16).aperture[:256,:256]
 plt.figure(figsize=(3, 3))
 plt.imshow(R, cmap='gray')
 plt.xticks([0, 127, 255], [1, 128, 256])
@@ -263,9 +267,7 @@ plt.show()
 
 ### The seperator and reference image
 
-There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen, so that its width $d$ is equal to $N,$ the pixel width of the image.  The image $X$ will be combined with the padding $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.
-
-After the image, separator, and padding are concatenated left-to-right (i.e., by column), the result $\textrm{concat}(X, Z, R)$ is padded with zero values on the right and on the bottom to a final size of $M_1 \cdot M_2.$  Let $\textrm{pad}(\textrm{concat}(X, Z, R), M_1, M_2)$ be the result.
+There is also a purely black separator of the same size as the image, which we will use $Z$ to denote because it is full of zero values.  Like the reference pattern, this separator is typically chosen to be the same size as the specimen, so that its width $d$ is equal to $N,$ the pixel width of the image.  The image $X$ will be concatenated left-to-right (i.e., by column) with the separator $Z$ and the reference image $R$, and the result will be doenoted as `X_Z_R` in the code.
 
 ```{python}
 #| fig-cap: Source image, zero separator, and reference image concatenated.
@@ -275,9 +277,9 @@ After the image, separator, and padding are concatenated left-to-right (i.e., by
 
 N = np.shape(X_src)[0]
 d = N
-X0R = np.concatenate([X_src, np.zeros((N, d)), R], axis=1)
+X_Z_R = np.concatenate([X_src, np.zeros((N, d)), R], axis=1)
 plt.figure(figsize=(9, 3))
-plt.imshow(X0R, cmap='gray')
+plt.imshow(X_Z_R, cmap='gray')
 plt.xticks([0, 255, 511, 767], [1, 256, 512, 768])
 plt.yticks([0, 127, 255], [1, 128, 256])
 plt.tight_layout()
@@ -294,7 +296,7 @@ The original image, separator and reference image are next padded to the right a
 P = \textrm{pad}(\textrm{cat}(X^{\textrm{src}}, Z, R), M_1, M_2)
 \end{equation}
 be the padded version of the image, separator, and reference image, where $X^{\textrm{src}}$ is the source image, $Z$ is a zero matrix, and $R$ is the reference image.  The padding is taken to be twice the size of the material imaged, so that $M_1 = 6 \cdot 256$ and $M_2 = 2 \cdot 256,$ which brings the total number of sensors to 786,432, just shy of one megapixel.
-
+<!-- BMW: mention that padding can be smaller? see section 5 of @barmherzig2022 -->
 
 
 ### Fourier transform shift
@@ -360,7 +362,7 @@ $P$ has shape $512 \times 1536,$ so the two-dimensional FFT requires 1536 one-di
 
 M1 = 256 * 2
 M2 = 256 * 3 * 2
-V = np.abs(np.fft.fft2(X0R, s=(M1, M2)))**2
+V = np.abs(np.fft.fft2(X_Z_R, s=(M1, M2)))**2
 log1pV = np.fft.fftshift(np.log1p(V))
 plt.figure(figsize=(9,3))
 plt.imshow(log1pV, cmap="viridis")
@@ -434,6 +436,8 @@ plot = (
 )
 plot
 ```
+
+<!-- BMW: I'd still like to see the plot that is figure 5 with the beamstop added, for contrast, unless you have a strong objection. -->
 
 ### Normalization
 
@@ -605,7 +609,7 @@ The second line of the model block defines the matrix `X_Z_R` to be the result o
   }
 ```
 
-This just pads the matrix with zeros, then applies the built-in two-dimensional FFT function to the padded image, separator, and reference (`Z`).  The result is a matrix of complex values.  The model expression then takes the absolue value of the complex matrix elemenetwise (which produces a real-valued matrix of the smae dimension), the result of which is squared elementwise to produce the matrix `V`, the entries of which are proportional to the photon flux expected at that position.  The next line of the model defines `lambda` by normalizing `V` to the expected per-sensor photon count `N_p`.
+This just pads the matrix with zeros, then applies the built-in two-dimensional FFT function to the padded image, separator, and reference (supplied as the argument `Z`).  The result is a matrix of complex values.  The model expression then takes the absolue value of the complex matrix elemenetwise (which produces a real-valued matrix of the smae dimension), the result of which is squared elementwise to produce the matrix `V`, the entries of which are proportional to the photon flux expected at that position.  The next line of the model defines `lambda` by normalizing `V` to the expected per-sensor photon count `N_p`.
 
 The final lines of the model loop over the entries of the padded matrix which are not beamstopped and sample photons (`Y`) with a Poisson distribution based on the rate (`lambda`).  This defines the likelihood and completes the model specification, which has followed the mathematical definition of the forward model directly.
 
@@ -661,7 +665,7 @@ data = {
 
 ## Optimization-based point estimates
 
-In this section, Stan's optimizer is used to find point estimates as modes of a target density.  Stan uses L-BFGS [@zhu1997], a limited-memory form of quasi-Newton optimization, which is a widely used black-box optimizer that uses finite-differences of the past few gradients to approximate a low-rank plus diagonal preconditioner dynamically doing optimization.  This reduces linear algebra from the $\mathcal{O}(N^3)$ required for Newton's method to $\mathcal{O}(J^2 \cdot N),$ where $J$ is the rank of the preconditioner before adding the diagonal to make it positive definite.
+In this section, Stan's optimizer is used to find point estimates as modes of a target density.  Stan uses L-BFGS [@zhu1997], a limited-memory form of quasi-Newton optimization, which is a widely used black-box optimizer that uses finite-differences of the past few gradients to approximate a low-rank plus diagonal preconditioner dynamically during optimization.  This reduces linear algebra from the $\mathcal{O}(N^3)$ required for Newton's method to $\mathcal{O}(J^2 \cdot N),$ where $J$ is the rank of the preconditioner before adding the diagonal to make it positive definite.
 
 ### Penalized maximum likelihood estimation
 
@@ -748,7 +752,7 @@ for j, sigma in enumerate(sigmas):
     X_fits[j, :, :] = fit.stan_variable('X').copy()
 ```
 
-The resultig estimates are displayed in @fig-sigmas.
+The resulting estimates are displayed in @fig-sigmas.
 
 ```{python}
 #| fig-cap: Effect of different sigma values on smoothing.
@@ -795,7 +799,7 @@ Markov-chain Monte Carlo methods run a Markov chain, which in the limit has the 
 Sampling is run in the same way as Pathinder, with draws being extracted and averaged to create the estimate.
 
 ```{python}
-# inits_from_pf = fit_pf.create_inits(2)
+# inits_from_pf = fit_pf.create_inits(2, seed = 5678)
 # fit_sample = model.sample(data, inits=inits_from_pf, chains=2, parallel_chains=2,
 #                           iter_warmup=20, iter_sampling=20,
 #                           show_console=False, show_progress=False,
