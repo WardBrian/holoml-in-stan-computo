@@ -739,6 +739,7 @@ add_plot(fig, 1, 4, 4, "(d) MLE/MAP [unc]", X_hat_mle_unc)
 
 ## Effect of prior scale
 
+<!-- BMW: clarify that this is for the constrained model? -->
 There is a free tuning parameter $\sigma,$ which is the prior scale.  This is input as data to the Stan program and used in the ICAR prior to smooth (i.e., regularize) the values of adjacent pixels toward each other.  The earlier example used $\sigma = 1,$ which does very little smoothing given that the range of values is 0 to 1.  A range of values for $\sigma$ can be evaluated in a loop.
 
 ```{python}
@@ -796,7 +797,7 @@ Pathfinder is straightforward to run.
 
 Markov-chain Monte Carlo methods run a Markov chain, which in the limit has the target density as its stationary distribution.  This allows draws from the chain to be used for plug-in Monte Carlo estimates.
 
-Sampling is run in the same way as Pathinder, with draws being extracted and averaged to create the estimate.
+Sampling is run in the same way as Pathfinder, with draws being extracted and averaged to create the estimate.
 
 ```{python}
 # inits_from_pf = fit_pf.create_inits(2, seed = 5678)
