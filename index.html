@@ -2,14 +2,14 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.4.552">
+<meta name="generator" content="quarto-1.5.56">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Brian Ward">
 <meta name="author" content="Bob Carpenter">
 <meta name="author" content="David Barmherzig">
-<meta name="dcterms.date" content="2024-03-29">
+<meta name="dcterms.date" content="2024-08-14">
 <meta name="keywords" content="Stan, coherent-diffraction-imaging, statistics, bayesian, phase-retrieval, inverse-problem <br /> <br />">
 
 <title>Estimation and Sampling for Holographic Coherent Diffraction Imaging</title>
@@ -38,7 +38,7 @@ div.sourceCode { overflow: auto; }
 }
 @media print {
 pre > code.sourceCode { white-space: pre-wrap; }
-pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+pre > code.sourceCode > span { display: inline-block; text-indent: -5em; padding-left: 5em; }
 }
 pre.numberSource code
   { counter-reset: source-line 0; }
@@ -109,8 +109,9 @@ div.csl-indent {
 background: #034E79;
       }
 </style>
+<meta name="quarto:status" content="draft">
 
-  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"></script>
+  <script>window.backupDefine = window.define; window.define = undefined;</script><script src="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.js"></script>
   <script>document.addEventListener("DOMContentLoaded", function () {
  var mathElements = document.getElementsByClassName("math");
  var macros = [];
@@ -125,7 +126,7 @@ background: #034E79;
    });
 }}});
   </script>
-  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.css">
+  <script>window.define = window.backupDefine; window.backupDefine = undefined;</script><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@latest/dist/katex.min.css">
 
 <script type="text/javascript">
 const typesetMath = (el) => {
@@ -156,7 +157,7 @@ window.Quarto = {
 
 </head>
 
-<body>
+<body><div id="quarto-draft-alert" class="alert alert-warning"><i class="bi bi-pencil-square"></i>Draft</div>
 
 <header id="title-block-header" class="quarto-title-block default page-columns page-full">
   
@@ -215,14 +216,14 @@ ISSN 2824-7795</p>
       <div>
       <div class="quarto-title-meta-heading">Published</div>
       <div class="quarto-title-meta-contents">
-        <p class="date">March 29, 2024</p>
+        <p class="date">August 14, 2024</p>
       </div>
     </div>
                                     
       <div>
       <div class="quarto-title-meta-heading">Modified</div>
       <div class="quarto-title-meta-contents">
-        <p class="date-modified">March 29, 2024</p>
+        <p class="date-modified">August 14, 2024</p>
       </div>
     </div>
       
@@ -344,7 +345,7 @@ ISSN 2824-7795</p>
 <section id="python-boilerplate" class="level2" data-number="1.1">
 <h2 data-number="1.1" class="anchored" data-anchor-id="python-boilerplate"><span class="header-section-number">1.1</span> Python boilerplate</h2>
 <p>Generating the data requires the standard Python numerical libraries <code>scipy.stats</code> and <code>numpy</code>, as well as the plotting libraries <code>matplotlib</code> and <code>plotnine</code> to display results. Stan is accessed through the <code>cmdstanpy</code> interface. There is also code for converting RGB-coded images to grayscale.</p>
-<div id="a9ffd0a5" class="cell" data-execution_count="1">
+<div id="eca694df" class="cell" data-execution_count="1">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> cmdstanpy <span class="im">as</span> csp</span>
@@ -398,7 +399,7 @@ ISSN 2824-7795</p>
 <span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-mimivirus" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-mimivirus" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-mimivirus-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-mimivirus-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -431,7 +432,7 @@ Figure&nbsp;1: Image of a mimivirus. The capsid is an icosahedron 400nm across w
 <span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-test_img" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-test_img" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-test_img-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-test_img-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -532,7 +533,7 @@ width:  271
 height: 269</code></pre>
 </div>
 <div class="cell-output cell-output-display">
-<div id="fig-ura" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-ura" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-ura-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-ura-output-2.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -562,7 +563,7 @@ Figure&nbsp;3: Uniformly redundant array. This reference image is optimal for id
 <span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-separator" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-separator" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-separator-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-separator-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -603,7 +604,7 @@ D &amp; C
 B &amp; A
 \end{bmatrix}
 \end{equation}</span> The elements are swapped across the diagonals, or equivalently, cyclically rotated in the horizontal direction, then in the vertical direction. Consider the following concrete example matrix.</p>
-<div id="98d70634" class="cell" data-execution_count="6">
+<div id="85f69b27" class="cell" data-execution_count="6">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>K <span class="op">=</span> <span class="dv">4</span></span>
@@ -624,7 +625,7 @@ B &amp; A
 </div>
 </div>
 <p>Shifting it produces the following shifted matrix, where the center elements move to the corners and vice-versa.</p>
-<div id="b2aff5f9" class="cell" data-execution_count="7">
+<div id="23a340b1" class="cell" data-execution_count="7">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"fftshift(A) =</span><span class="ch">\n</span><span class="sc">{</span>A_shift<span class="sc">}</span><span class="ch">\n</span><span class="ss">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
@@ -639,7 +640,7 @@ B &amp; A
 </div>
 </div>
 <p>Shifting back returns the original matrix.</p>
-<div id="da70b6aa" class="cell" data-execution_count="8">
+<div id="9feeb024" class="cell" data-execution_count="8">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>A_shift_ishift <span class="op">=</span> np.fft.ifftshift(A_shift)</span>
@@ -674,7 +675,7 @@ V = \big| \, \textrm{fft2}(P) \, \big|^2.
 <span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-fftout" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-fftout" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-fftout-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-fftout-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -744,10 +745,10 @@ Figure&nbsp;5: Squared magnitudes of the FFT of the concatenated and padded imag
 <span id="cb14-47"><a href="#cb14-47" aria-hidden="true" tabindex="-1"></a>plot</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-beamstop" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-beamstop" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-beamstop-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
-<img src="HoloCDI_files/figure-html/fig-beamstop-output-1.png" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
+<img src="HoloCDI_files/figure-html/fig-beamstop-output-1.png" class="quarto-figure quarto-figure-center figure-img" data-fig-pos="t" width="600" height="200">
 </div>
 <figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-beamstop-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 Figure&nbsp;6: Illustration of beamstop before the shifting. The solid blue rectangles occlude the low frequencies in the corners, so that photon flux is not measured at those positions.
@@ -798,7 +799,7 @@ Y_{i, j} \sim
 <span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-simy" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-simy" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-simy-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-simy-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -926,7 +927,7 @@ Figure&nbsp;7: Sampled value of <span class="math inline">Y</span>, which is dis
 <section id="compiling-the-models" class="level2" data-number="5.1">
 <h2 data-number="5.1" class="anchored" data-anchor-id="compiling-the-models"><span class="header-section-number">5.1</span> Compiling the models</h2>
 <p>The first thing to do is to compile the Stan model. This is done by transpiling from Stan to C++, then compiling the C+ and linking against the rest of Stan’s math library and algorithms. This is all handled by the following CmdStanPy calls, one for the constrained and one for the unconstrained model.</p>
-<div id="4d692a95" class="cell" data-execution_count="12">
+<div id="cd0b6c20" class="cell" data-execution_count="12">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> csp.CmdStanModel(stan_file<span class="op">=</span><span class="st">'stan/holoCDI.stan'</span>)</span>
@@ -937,7 +938,7 @@ Figure&nbsp;7: Sampled value of <span class="math inline">Y</span>, which is dis
 <section id="constructing-the-data-dictionary" class="level2" data-number="5.2">
 <h2 data-number="5.2" class="anchored" data-anchor-id="constructing-the-data-dictionary"><span class="header-section-number">5.2</span> Constructing the data dictionary</h2>
 <p>CmdStanPy takes in data in the form of a Python dictionary. The dictionary needs to define all the variables used in the Stan program and they have to be the right shapes to match the Stan declarations. All of the constants have been defined and the data <code>Y</code> has been simulated. Here, the value for <code>sigma</code> is defined to be 1; other prior scales are evaluated below.</p>
-<div id="5085fba7" class="cell" data-execution_count="13">
+<div id="749c55a2" class="cell" data-execution_count="13">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>sigma <span class="op">=</span> <span class="dv">1</span></span>
@@ -957,7 +958,7 @@ Figure&nbsp;7: Sampled value of <span class="math inline">Y</span>, which is dis
 x^* = \textrm{arg max}_x \log p(y; \, x) + \log \textrm{icar}(x),
 \end{equation}</span> but with no Jacobian adjustment for any change-of-variables used to constrain <span class="math inline">x</span> because <span class="math inline">x</span> is no longer considered to be a random variable (hence the semicolon in the notation).</p>
 <p>This estimate can be computed through optimization in Stan and extracted into a Python variable.</p>
-<div id="65406471" class="cell" data-execution_count="14">
+<div id="b89101b5" class="cell" data-execution_count="14">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>fit_mle <span class="op">=</span> model.optimize(data <span class="op">=</span> data, inits<span class="op">=</span><span class="fl">0.5</span>, jacobian<span class="op">=</span><span class="va">False</span>, seed <span class="op">=</span> <span class="dv">5678</span>)</span>
@@ -973,7 +974,7 @@ x^* = \textrm{arg max}_x \log p(y; \, x) + \log \textrm{icar}(x),
 x^{**} = \textrm{arg max}_x \log p(x \mid y).
 \end{equation}</span></p>
 <p>The maximum a posteriori (MAP) estimate can be calculated with optimization in Stan by turning on the Jacobian adjustment for constrained parameters.</p>
-<div id="6dd461e3" class="cell" data-execution_count="15">
+<div id="0022d6b9" class="cell" data-execution_count="15">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>fit_map <span class="op">=</span> model.optimize(data <span class="op">=</span> data, inits<span class="op">=</span><span class="fl">0.5</span>, jacobian<span class="op">=</span><span class="va">True</span>, seed <span class="op">=</span> <span class="dv">5678</span>)</span>
@@ -984,7 +985,7 @@ x^{**} = \textrm{arg max}_x \log p(x \mid y).
 <section id="mle-and-map-for-unconstrained-model" class="level3" data-number="5.3.3">
 <h3 data-number="5.3.3" class="anchored" data-anchor-id="mle-and-map-for-unconstrained-model"><span class="header-section-number">5.3.3</span> MLE and MAP for unconstrained model</h3>
 <p>The third estimation strategy involves the direct unconstrained parameterization with an ICAR prior on the unconstrained parameters. Because there are no constraining transforms, the penalized MLE and MAP estimates coincide. These can be computed in Stan as follows.</p>
-<div id="e38bb25c" class="cell" data-execution_count="16">
+<div id="03f0bb9a" class="cell" data-execution_count="16">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>sigma_unc <span class="op">=</span> <span class="dv">10</span></span>
@@ -1016,7 +1017,7 @@ x^{**} = \textrm{arg max}_x \log p(x \mid y).
 <span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>add_plot(fig, <span class="dv">1</span>, <span class="dv">4</span>, <span class="dv">4</span>, <span class="st">"(d) MLE/MAP [unc]"</span>, X_hat_mle_unc)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-pointfits" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="t">
+<div id="fig-pointfits" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="t" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-pointfits-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-pointfits-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="t">
@@ -1033,7 +1034,7 @@ Figure&nbsp;8: Original image and optimization-based reconstructions. (a) origin
 <section id="effect-of-prior-scale" class="level2" data-number="5.4">
 <h2 data-number="5.4" class="anchored" data-anchor-id="effect-of-prior-scale"><span class="header-section-number">5.4</span> Effect of prior scale</h2>
 <p>There is a free tuning parameter <span class="math inline">\sigma,</span> which is the prior scale. This is input as data to the Stan program and used in the ICAR prior to smooth (i.e., regularize) the values of adjacent pixels toward each other. The earlier example used <span class="math inline">\sigma = 1,</span> which does very little smoothing given that the range of values is 0 to 1. A range of values for <span class="math inline">\sigma</span> can be evaluated in a loop.</p>
-<div id="a5452c11" class="cell" data-execution_count="18">
+<div id="8c2a8d6d" class="cell" data-execution_count="18">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>sigmas <span class="op">=</span> [<span class="dv">1</span><span class="op">/</span><span class="dv">256</span>, <span class="dv">1</span><span class="op">/</span><span class="dv">64</span>, <span class="dv">1</span><span class="op">/</span><span class="dv">16</span>, <span class="dv">1</span><span class="op">/</span><span class="dv">4</span>, <span class="dv">1</span>, <span class="dv">4</span>, <span class="dv">16</span>]</span>
@@ -1056,7 +1057,7 @@ Figure&nbsp;8: Original image and optimization-based reconstructions. (a) origin
 <span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    add_plot(fig, <span class="dv">2</span>, (J <span class="op">+</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span>, j <span class="op">+</span> <span class="dv">2</span>, <span class="ss">f"sigma: </span><span class="sc">{</span>sigma<span class="sc">:5.3f}</span><span class="ss">"</span>, X_fits[j])</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output cell-output-display">
-<div id="fig-sigmas" class="quarto-figure quarto-figure-center quarto-float anchored" data-fig-align="center" data-fig-pos="top">
+<div id="fig-sigmas" class="quarto-float quarto-figure quarto-figure-center anchored" data-fig-pos="top" data-fig-align="center">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-sigmas-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <img src="HoloCDI_files/figure-html/fig-sigmas-output-1.svg" class="img-fluid quarto-figure quarto-figure-center figure-img" data-fig-pos="top">
@@ -1078,7 +1079,7 @@ Figure&nbsp;9: Effect of different sigma values on smoothing.
 \phi^* = \textrm{arg max}_\phi \ \textrm{KL}[q(x \mid \phi) || p(x \mid y)].
 \end{equation}</span> In this case study, the Pathfinder approach is used <span class="citation" data-cites="zhang2022">(<a href="#ref-zhang2022" role="doc-biblioref">Zhang et al. 2022</a>)</span>. Pathfinder runs quasi-Newton optimization on the target density <span class="math inline">p(x \mid y)</span> from random initializations and then uses points along the optimization trajectory as the location of second-order Taylor approximations to the target density with the low-rank plus diagonal covariance estimated by the L-BFGS optimizer. The result is a series of multivariate normal approximations. Each of these is evaluated for KL-divergence using Monte Carlo methods (which are stable for the KL divergence in a way they are not stable for the gradients). This is done several times and then the normal approximations are sampled using importance resampling. This gives us unconstrained draws, which are then constrained to give the final set of draws for the method.</p>
 <p>Pathfinder is straightforward to run.</p>
-<div id="e190352c" class="cell" data-execution_count="20">
+<div id="d53c9a8c" class="cell" data-execution_count="20">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="co"># fit_pf = model.pathfinder(data, inits=1, max_lbfgs_iters=10,</span></span>
@@ -1095,7 +1096,7 @@ Figure&nbsp;9: Effect of different sigma values on smoothing.
 <h3 data-number="5.5.2" class="anchored" data-anchor-id="markov-chain-monte-carlo"><span class="header-section-number">5.5.2</span> Markov-chain Monte Carlo</h3>
 <p>Markov-chain Monte Carlo methods run a Markov chain, which in the limit has the target density as its stationary distribution. This allows draws from the chain to be used for plug-in Monte Carlo estimates.</p>
 <p>Sampling is run in the same way as Pathinder, with draws being extracted and averaged to create the estimate.</p>
-<div id="16fefd1e" class="cell" data-execution_count="21">
+<div id="0ca588ee" class="cell" data-execution_count="21">
 <details class="code-fold">
 <summary>Hide/Show the code</summary>
 <div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># inits_from_pf = fit_pf.create_inits(2, seed = 5678)</span></span>
@@ -1111,7 +1112,7 @@ Figure&nbsp;9: Effect of different sigma values on smoothing.
 </section>
 <section id="plotting-mcmc-derived-fits" class="level3" data-number="5.5.3">
 <h3 data-number="5.5.3" class="anchored" data-anchor-id="plotting-mcmc-derived-fits"><span class="header-section-number">5.5.3</span> Plotting MCMC-derived fits</h3>
-<div id="fig-bayesfits" class="cell quarto-figure quarto-figure-center quarto-float anchored" data-execution_count="22">
+<div id="fig-bayesfits" class="cell quarto-float quarto-figure quarto-figure-center anchored" data-execution_count="22">
 <figure class="quarto-float quarto-float-fig figure">
 <div aria-describedby="fig-bayesfits-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
 <details class="code-fold">
@@ -1407,7 +1408,7 @@ Zhu, Ciyou, Richard H Byrd, Peihuang Lu, and Jorge Nocedal. 1997. <span>“Algor
   title = {Estimation and {Sampling} for {Holographic} {Coherent}
     {Diffraction} {Imaging}},
   journal = {Computo},
-  date = {2024-03-29},
+  date = {2024-08-14},
   url = {https://computo.sfds.asso.fr/template-computo-quarto},
   doi = {xxxx},
   issn = {2824-7795},
@@ -1428,7 +1429,7 @@ Zhu, Ciyou, Richard H Byrd, Peihuang Lu, and Jorge Nocedal. 1997. <span>“Algor
 </code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre><div class="quarto-appendix-secondary-label">For attribution, please cite this work as:</div><div id="ref-ward2024" class="csl-entry quarto-appendix-citeas" role="listitem">
 Ward, Brian, Bob Carpenter, and David Barmherzig. 2024.
 <span>“Estimation and Sampling for Holographic Coherent Diffraction
-Imaging.”</span> <em>Computo</em>, March. <a href="https://doi.org/xxxx">https://doi.org/xxxx</a>.
+Imaging.”</span> <em>Computo</em>, August. <a href="https://doi.org/xxxx">https://doi.org/xxxx</a>.
 </div></div></section></div></main>
 <!-- /main column -->
 <script id="quarto-html-after-body" type="application/javascript">
@@ -1466,18 +1467,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     }
     return false;
   }
-  const clipboard = new window.ClipboardJS('.code-copy-button', {
-    text: function(trigger) {
-      const codeEl = trigger.previousElementSibling.cloneNode(true);
-      for (const childEl of codeEl.children) {
-        if (isCodeAnnotation(childEl)) {
-          childEl.remove();
-        }
-      }
-      return codeEl.innerText;
-    }
-  });
-  clipboard.on('success', function(e) {
+  const onCopySuccess = function(e) {
     // button target
     const button = e.trigger;
     // don't keep focus
@@ -1509,7 +1499,29 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
     }, 1000);
     // clear code selection
     e.clearSelection();
+  }
+  const getTextToCopy = function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+    text: getTextToCopy
   });
+  clipboard.on('success', onCopySuccess);
+  if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+    // For code content inside modals, clipBoardJS needs to be initialized with a container option
+    // TODO: Check when it could be a function (https://github.com/zenorocha/clipboard.js/issues/860)
+    const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+      text: getTextToCopy,
+      container: window.document.getElementById('quarto-embedded-source-code-modal')
+    });
+    clipboardModal.on('success', onCopySuccess);
+  }
   const viewSource = window.document.getElementById('quarto-view-source') ||
                      window.document.getElementById('quarto-code-tools-source');
   if (viewSource) {
@@ -1568,7 +1580,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
         return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
     }
     // Inspect non-navigation links and adorn them if external
- 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool)');
+ 	var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
     for (var i=0; i<links.length; i++) {
       const link = links[i];
       if (!isInternal(link.href)) {
@@ -2745,7 +2757,7 @@ window.document.addEventListener("DOMContentLoaded", function (event) {
 <span id="cb38-891"><a href="#cb38-891" aria-hidden="true" tabindex="-1"></a><span class="in">```stan</span></span>
 <span id="cb38-892"><a href="#cb38-892" aria-hidden="true" tabindex="-1"></a><span class="in">{{&lt; include stan/holoCDI-unc.stan &gt;}}</span></span>
 <span id="cb38-893"><a href="#cb38-893" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
-</code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</code><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></pre></div>
 </div></div></div></div></div>
 </div> <!-- /content -->
 
